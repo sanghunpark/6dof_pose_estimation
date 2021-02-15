@@ -1,0 +1,9 @@
+# path
+data_root: ./data/LINEMOD
+
+# data
+img_size: 672
+
+# training
+batch_size: 16
+num_workers: 8
