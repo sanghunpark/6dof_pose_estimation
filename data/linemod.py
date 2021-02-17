@@ -40,9 +40,6 @@ class Linemod(Dataset):
         if self.transform is  not None:
             rgb = self.transform(rgb)
             mask = self.transform(mask)
-
-        # rgb.show('rgb')
-        # mask.show('mask')
         return {'rgb': rgb, 'mask': mask, 'label':label}
 
     def __len__(self):
@@ -68,14 +65,10 @@ class Linemod(Dataset):
                 data_path.extend(['./data/' + s for s in map(str.rstrip, lines)]) # remove all '\n's and './data/' in lines
         return data_path
 
-    def _get_label(self, label_path, n_pnts=9):# 2D bounding boxe corners (8) + 2D centroid point (1)
-        # n_label = 2 * n_pnts + 3 # class idx + x range + y range (in 2D bounding boex)
+    def _get_label(self, label_path): # n_points: 2D bounding boxe corners (8) + 2D centroid point (1)
+        # n_label = 2 * n_points + 3 # class idx + x range + y range (in 2D bounding boex)
         if os.path.isfile(label_path):
             label = np.loadtxt(label_path)
             return label
         else:
             return np.array([])
-
-
-
-

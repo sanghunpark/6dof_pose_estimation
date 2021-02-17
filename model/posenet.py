@@ -58,9 +58,9 @@ class PoseNet(nn.Module):
         x = self.rgb_enc(x)
         vf = self.vf_dec(x) # Bx(2*n_keypoints)xHxW (vector field)
         sg = self.sg_dec(x) # Bx(n_class)xHxW (segmenation)
-        
+
         ### 2-stage
-        bb = torch.zeros(self.n_class, B, self.n_keypoint, H, W).to(self.device) # CLSxBx(n_keypoints)xHxW
+        bb = torch.zeros(self.n_class, B, self.n_keypoint, H, W).to(self.device) # (n_class)xBx(n_keypoints)xHxW
         for c in range(self.n_class):
             bb[c] = self.bb_net(torch.cat((sg[:,c:c+1,:,:], vf), dim=1)) # Bx(n_keypoints)xHxW
         return {'vf': vf, 'sg': sg, 'bb':bb}

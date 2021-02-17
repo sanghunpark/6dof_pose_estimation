@@ -10,6 +10,9 @@ import torchvision.utils as vutils
 # etc
 from tqdm import tqdm
 
+# My library
+from utils.loss import compute_losses
+
 class Trainer:
     def __init__(self, train_data_loader, val_data_loader, device, model, optimizer, config):
         self.train_data_loader = train_data_loader
@@ -19,14 +22,17 @@ class Trainer:
         self.checkpoint_path = config['checkpoints']
         self.checkpoint_dir = os.path.dirname(self.checkpoint_path)              
         self.model = model
-        self.optimizer = optimizer        
+        self.optimizer = optimizer
+        
+        # weights
+        self.bb_w = config['bb_w']
         
         checkpoint_dir_name = os.path.basename(self.checkpoint_dir)
         self.logger = SummaryWriter('./checkpoint/logs/' + checkpoint_dir_name)
 
     def log(self, mode, losses, it):
-        loss1, loss2 = losses # dummy
-        self.logger.add_scalars(mode+'/loss',{'loss1' : loss1,
+        loss_bb, loss2 = losses # dummy
+        self.logger.add_scalars(mode+'/loss',{'loss_bb' : loss_bb,
                                             'loss2' : loss2}, it+1)
 
     def train(self):        
@@ -38,16 +44,24 @@ class Trainer:
         for epoch in range(0, max_epochs):
             iter_bar.reset()
             for i, data in enumerate(self.val_data_loader):
-                losses = self.iterate(data, it, epoch)
-                tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] Loss_1: {losses[0].item():.4f} Loss_2: {losses[1].item():.4f}') 
+                loss = self.iterate(data, it, epoch)
+                tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] loss: {loss.item():.4f}') 
                 it += 1
                 iter_bar.update()
             epoch_bar.update()
 
-    def iterate(self, data, it, epoch):
+    def iterate(self, data, it, epoch):        
         out = self.model(data['rgb'].to(self.device))        
-        losses = self.compute_losses(out, data)
+        losses = compute_losses(out, data, self.device)
+
         # update model
+        loss_bb, loss_temp = losses
+        loss = self.bb_w * loss_bb + \
+               1.0 * loss_temp
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
         # log losses
         if (it+1) % self.config['log_freq'] == 0:            
@@ -64,28 +78,24 @@ class Trainer:
             self.logger.add_image('dummy_img', dummy_img, it+1)            
             self.save(it+1, epoch)
         
-        return losses
+        return loss
 
     def val(self):
         self.model.eval()
         with torch.no_grad():
             max_iter = len(self.val_data_loader)
             iter_bar = tqdm(desc='val iter: ', total=max_iter, position=1, leave=True) # for test
-            loss1_sum = torch.zeros([1]).to(self.device)
-            loss2_sum = torch.zeros([1]).to(self.device)            
+            loss_bb_avg = torch.zeros([1]).to(self.device)
+            loss2_avg= torch.zeros([1]).to(self.device)            
             for i, data in enumerate(self.val_data_loader): # for test
                 out = self.model(data['rgb'].to(self.device))
-                loss1, loss2 = self.compute_losses(out, data['label'])
-                loss1_sum += loss1
-                loss2_sum += loss2
+                loss_bb, loss2 = compute_losses(out, data, device=self.device)
+                loss_bb_avg += loss_bb / max_iter
+                loss2_avg += loss2 / max_iter
                 
                 iter_bar.update()
         self.model.train()
-        return [loss1_sum.mean(), loss2_sum.mean()]
-
-    def compute_losses(self, out, data):
-        # dummy losses
-        return [torch.zeros([1]).to(self.device), torch.zeros([1]).to(self.device)]
+        return [loss_bb_avg, loss2_avg]
 
     def save(self, it, epoch):
         # create a directory for checkpoints

@@ -1,0 +1,1 @@
+scp -P 55000 *.py requirements.txt *.yaml model/*.py utils/*.py data/*.py flagship@143.248.247.64:~/Documents/sanghun/6dof/6dof_pose_estimation/data

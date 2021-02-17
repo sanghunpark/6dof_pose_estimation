@@ -56,7 +56,6 @@ def train(args, config):
                             betas=(config['beta1'],
                             config['beta2']),
                             eps=config['eps'])
-    
 
     # get dataset
     transf = transforms.Compose([
