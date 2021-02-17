@@ -43,7 +43,7 @@ class Linemod(Dataset):
 
         # rgb.show('rgb')
         # mask.show('mask')
-        return (rgb, mask, label)
+        return {'rgb': rgb, 'mask': mask, 'label':label}
 
     def __len__(self):
         return len(self.data_paths)
