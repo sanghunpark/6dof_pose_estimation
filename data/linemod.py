@@ -13,10 +13,10 @@ from torch.utils.data import Dataset
 from PIL import Image
 
 class Linemod(Dataset):
-    def __init__(self, root, objects = [], split = 'train', shuffle = True, transform = None) -> None:
+    def __init__(self, root, n_class, split = 'train', shuffle = True, transform = None) -> None:
         self.root = root
         self.transform = transform
-        self.data_paths = self._get_data_path(objects, split)
+        self.data_paths = self._get_data_path(n_class, split)
 
         # if shuffle:
         #     random.shuffle(self.data_paths)
@@ -34,7 +34,7 @@ class Linemod(Dataset):
         # get data
         rgb = Image.open(rgb_path).convert('RGB')
         mask = Image.open(mask_path).convert('1')
-        label = torch.from_numpy(self._get_label(label_path))
+        label = torch.from_numpy(self._get_label(label_path)).float()
 
         # transform image
         if self.transform is  not None:
@@ -45,13 +45,13 @@ class Linemod(Dataset):
     def __len__(self):
         return len(self.data_paths)
 
-    def _get_data_path(self, objects, split):
+    def _get_data_path(self, n_class, split):
         # filter folders by 'objects'
         all_object_list = os.listdir(self.root)
-        if len(objects) == 0:
-            object_list = all_object_list
-        else:
-            object_list = set.intersection(set(objects), set(all_object_list))
+        # if len(objects) == 0:
+        object_list = all_object_list[:n_class]
+        # else:
+        #     object_list = set.intersection(set(objects), set(all_object_list))
         
         # make a list of data path
         data_path = []

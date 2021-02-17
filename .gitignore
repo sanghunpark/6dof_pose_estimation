@@ -137,3 +137,7 @@ data/TEST/
 checkpoint/
 
 test.ipynb
+
+scp.txt
+
+*.sh

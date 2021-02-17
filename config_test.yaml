@@ -1,0 +1,46 @@
+# path
+checkpoints: ./checkpoint/TEST/model_00000000.pt
+
+# data
+# data_root: ./data/LINEMOD
+# n_class: 13
+
+data_root: ./data/TEST
+n_class: 3
+img_size: 336
+
+# log frequency
+log_freq: 1000
+checkpoint_freq: 1000
+
+# training
+batch_size: 2
+num_workers: 2
+max_epochs: 100
+
+# optimizer
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+eps: 0.00000001
+
+# loss weight
+bb_w: 1
+vf_w: 1
+sg_w: 1
+cl_w: 1
+
+# network
+rgb_2_vf_seg:
+  n_f: 8
+  n_down: 3
+  n_res_blks: 2
+
+mlp:
+  n_f: 8
+  n_blks: 3
+
+bb_net:
+  n_f: 8
+  n_updown: 3
+  n_res_blks: 2
