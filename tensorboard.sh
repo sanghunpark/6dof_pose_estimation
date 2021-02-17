@@ -1,0 +1,1 @@
+tensorboard --logdir=./checkpoint/logs --port=8080
