@@ -12,7 +12,6 @@ import torch.optim as optim
 from data.linemod import Linemod
 from trainer import Trainer
 from model.posenet import PoseNet
-
 class WappedDataParallel(nn.DataParallel):
         def __getattr__(self, name):
             try:
@@ -63,7 +62,7 @@ def train(args, config):
         transforms.ToTensor()
     ])
     train_data_loader = DataLoader(Linemod(data_root,                   
-                                    objects = config['class'],
+                                    n_class = config['n_class'],
                                     split='train',
                                     transform=transf),
                                     batch_size=(config['batch_size']),
@@ -72,7 +71,7 @@ def train(args, config):
                                     drop_last=True)
     
     val_data_loader = DataLoader(Linemod(data_root,                   
-                                    objects = config['class'],
+                                    n_class = config['n_class'],
                                     split='test',
                                     transform=transf),
                                     batch_size=(config['batch_size']),

@@ -3,8 +3,7 @@ from torch import nn
 import torch
 
 # My library
-from model.nets import Encoder, Decoder, Unet
-
+from model.nets import Encoder, Decoder, Unet, MLP
 class PoseNet(nn.Module):
     def __init__(self, config, device):
         super(PoseNet, self).__init__()
@@ -30,7 +29,7 @@ class PoseNet(nn.Module):
             pad_type='reflect',
             upsample=False)
         
-        self.n_class = len(config['class'])
+        self.n_class = config['n_class']
         self.sg_dec = Decoder(
             ups=config['rgb_2_vf_seg']['n_down'],
             dim=self.rgb_enc.output_dim,
@@ -40,6 +39,15 @@ class PoseNet(nn.Module):
             activ='relu',
             pad_type='reflect',
             upsample=False)
+
+        self.mlp = MLP(
+            input_dim=self.rgb_enc.output_dim,
+            dim=config['mlp']['n_f'],
+            output_dim=self.n_class,
+            n_blk=config['mlp']['n_blks'],
+            norm='none',
+            activ='relu',
+            global_pool=True)
         
         ### 2-stage
         self.bb_net = Unet(
@@ -58,12 +66,18 @@ class PoseNet(nn.Module):
         x = self.rgb_enc(x)
         vf = self.vf_dec(x) # Bx(2*n_keypoints)xHxW (vector field)
         sg = self.sg_dec(x) # Bx(n_class)xHxW (segmenation)
-
+        cl = self.mlp(x)
+        
         ### 2-stage
-        bb = torch.zeros(self.n_class, B, self.n_keypoint, H, W).to(self.device) # (n_class)xBx(n_keypoints)xHxW
-        for c in range(self.n_class):
-            bb[c] = self.bb_net(torch.cat((sg[:,c:c+1,:,:], vf), dim=1)) # Bx(n_keypoints)xHxW
-        return {'vf': vf, 'sg': sg, 'bb':bb}
+        batch_idx = torch.LongTensor(range(B)).to(self.device)
+        cls_idx = torch.argmax(cl, dim=1).to(self.device)
+        sg_1 = sg[batch_idx,cls_idx,:,:].unsqueeze(1)
+        bb = self.bb_net(torch.cat((sg_1, vf), dim=1))
+
+        # bb = torch.zeros(B, self.n_class, self.n_keypoint, H, W).to(self.device) # Bx(n_class)xx(n_keypoints)xHxW
+        # for c in range(self.n_class):
+        #     bb[batch_idx,c:c+1,:,:,:] = self.bb_net(torch.cat((sg[:,c:c+1,:,:], vf), dim=1)) # Bx(1)x(n_keypoints)xHxW
+        return {'bb':bb, 'vf': vf, 'sg': sg, 'cl':cl}
 
 
 

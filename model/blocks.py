@@ -180,3 +180,40 @@ class Conv2dBlock(nn.Module):
             if self.activation:
                 x = self.activation(x)
         return x
+
+class LinearBlock(nn.Module):
+    def __init__(self, in_dim, out_dim, norm='none', activation='relu'):
+        super(LinearBlock, self).__init__()
+        use_bias = True
+        self.fc = nn.Linear(in_dim, out_dim, bias=use_bias)
+
+        # initialize normalization
+        norm_dim = out_dim
+        if norm == 'bn':
+            self.norm = nn.BatchNorm1d(norm_dim)
+        elif norm == 'in':
+            self.norm = nn.InstanceNorm1d(norm_dim)
+        elif norm == 'none':
+            self.norm = None
+        else:
+            assert 0, "Unsupported normalization: {}".format(norm)
+
+        # initialize activation
+        if activation == 'relu':
+            self.activation = nn.ReLU(inplace=False)
+        elif activation == 'lrelu':
+            self.activation = nn.LeakyReLU(0.2, inplace=False)
+        elif activation == 'tanh':
+            self.activation = nn.Tanh()
+        elif activation == 'none':
+            self.activation = None
+        else:
+            assert 0, "Unsupported activation: {}".format(activation)
+
+    def forward(self, x):
+        out = self.fc(x)
+        if self.norm:
+            out = self.norm(out)
+        if self.activation:
+            out = self.activation(out)
+        return out

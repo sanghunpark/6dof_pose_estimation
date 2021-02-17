@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 
 # My library
-from model.blocks import UpdownUnetBlock, ResBlocks, Conv2dBlock, UpdownResBlock, ActFirstResBlocks
+from model.blocks import UpdownUnetBlock, ResBlocks, Conv2dBlock, UpdownResBlock, ActFirstResBlocks, LinearBlock
 
 class Encoder(nn.Module):
     def __init__(self, downs, input_dim, dim, n_res_blks, norm, activ, pad_type, global_pool=False, keepdim=False):
@@ -127,3 +127,20 @@ class Unet(nn.Module): # Unet
             x = torch.cat([x, x_skip], dim=1)
             x = self.models[m_idx](x)
         return x
+
+class MLP(nn.Module):
+    def __init__(self, input_dim, dim, output_dim, n_blk, norm, activ, global_pool=True):
+        super(MLP, self).__init__()
+        self.global_pool = global_pool
+        self.model = []
+        self.model += [LinearBlock(input_dim, dim, norm=norm, activation=activ)]
+        for i in range(n_blk):
+            self.model += [LinearBlock(dim, dim, norm=norm, activation=activ)]
+        self.model += [LinearBlock(dim, output_dim,
+                                   norm='none', activation='none')]
+        self.model = nn.Sequential(*self.model)
+
+    def forward(self, x):
+        if self.global_pool:
+           x = torch.sum(x, dim=(2,3))
+        return self.model(x.view(x.size(0), -1))

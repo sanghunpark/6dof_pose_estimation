@@ -26,15 +26,13 @@ class Trainer:
         
         # weights
         self.bb_w = config['bb_w']
-        
+        self.vf_w = config['vf_w']
+        self.sg_w = config['sg_w']    
+        self.cl_w = config['cl_w']
+
         checkpoint_dir_name = os.path.basename(self.checkpoint_dir)
         self.logger = SummaryWriter('./checkpoint/logs/' + checkpoint_dir_name)
-
-    def log(self, mode, losses, it):
-        loss_bb, loss2 = losses # dummy
-        self.logger.add_scalars(mode+'/loss',{'loss_bb' : loss_bb,
-                                            'loss2' : loss2}, it+1)
-
+    
     def train(self):        
         load_epoch, it = self.load() 
         max_epochs = self.config['max_epochs']
@@ -45,31 +43,40 @@ class Trainer:
             iter_bar.reset()
             for i, data in enumerate(self.val_data_loader):
                 loss = self.iterate(data, it, epoch)
-                tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] loss: {loss.item():.4f}') 
+                # tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] loss: {loss.item():.4f}') 
                 it += 1
                 iter_bar.update()
             epoch_bar.update()
 
+    def log(self, mode, losses, it):
+            loss_bb, loss_vf, loss_sg, loss_cl = losses
+            self.logger.add_scalars(mode+'/loss',{'loss_bb': loss_bb,
+                                                'loss_vf': loss_vf,
+                                                'loss_sg': loss_sg,
+                                                'loss_cl': loss_cl}, it+1)
+
     def iterate(self, data, it, epoch):        
+        
         out = self.model(data['rgb'].to(self.device))        
         losses = compute_losses(out, data, self.device)
 
         # update model
-        loss_bb, loss_temp = losses
+        loss_bb, loss_vf, loss_sg, loss_cl = losses
         loss = self.bb_w * loss_bb + \
-               1.0 * loss_temp
-
+               self.vf_w * loss_vf + \
+               self.sg_w * loss_sg + \
+               self.cl_w * loss_cl
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
         # log losses
-        if (it+1) % self.config['log_freq'] == 0:            
+        if (it+1) % self.config['log_freq'] == 0:
             self.log('train', losses, it)
             tqdm.write('logged losses at iteration %d' % (it+1))
         
         # log val losses & save model
-        if (it+1) % self.config['log_freq'] == 0:
+        if (it+1) % self.config['checkpoint_freq'] == 0:
             losses = self.val()            
             self.log('val', losses, it)
                         
@@ -86,16 +93,21 @@ class Trainer:
             max_iter = len(self.val_data_loader)
             iter_bar = tqdm(desc='val iter: ', total=max_iter, position=1, leave=True) # for test
             loss_bb_avg = torch.zeros([1]).to(self.device)
-            loss2_avg= torch.zeros([1]).to(self.device)            
+            loss_vf_avg = torch.zeros([1]).to(self.device)  
+            loss_sg_avg = torch.zeros([1]).to(self.device)  
+            loss_cl_avg = torch.zeros([1]).to(self.device)  
+                      
             for i, data in enumerate(self.val_data_loader): # for test
                 out = self.model(data['rgb'].to(self.device))
-                loss_bb, loss2 = compute_losses(out, data, device=self.device)
+                loss_bb, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device)
                 loss_bb_avg += loss_bb / max_iter
-                loss2_avg += loss2 / max_iter
+                loss_vf_avg += loss_vf / max_iter
+                loss_sg_avg += loss_sg / max_iter
+                loss_cl_avg += loss_cl / max_iter
                 
                 iter_bar.update()
         self.model.train()
-        return [loss_bb_avg, loss2_avg]
+        return [loss_bb_avg, loss_vf_avg, loss_sg_avg, loss_cl_avg]
 
     def save(self, it, epoch):
         # create a directory for checkpoints

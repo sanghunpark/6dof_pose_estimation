@@ -1,27 +1,22 @@
 # path
-checkpoints: ./checkpoint/TEST/model_00000002.pt
+checkpoints: ./checkpoint/bvs1/model_00000000.pt
 
 # data
 data_root: ./data/LINEMOD
-class:
-  - 'ape'
-  - 'cat'
-  - 'iron'
+n_class: 13
+
 # data_root: ./data/TEST
-# class:
-#   - 'diffuser'
-#   - 'realsense'
-#   - 'peace'
-img_size: 672
+# n_class: 3
+img_size: 336
 
 # log frequency
-log_freq: 2
-checkpoint_freq: 3
+log_freq: 100
+checkpoint_freq: 1000
 
 # training
-batch_size: 1
-num_workers: 1
-max_epochs: 1
+batch_size: 32
+num_workers: 4
+max_epochs: 100
 
 # optimizer
 lr: 0.0001
@@ -31,12 +26,19 @@ eps: 0.00000001
 
 # loss weight
 bb_w: 1
+vf_w: 1
+sg_w: 1
+cl_w: 1
 
 # network
 rgb_2_vf_seg:
   n_f: 8
   n_down: 3
   n_res_blks: 2
+
+mlp:
+  n_f: 8
+  n_blks: 3
 
 bb_net:
   n_f: 8
