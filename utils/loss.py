@@ -9,7 +9,7 @@ import kornia
 # My library
 from utils.utils import get_confidence_map, get_vector_field
     
-def compute_losses(out, data, device):
+def compute_losses(out, data, device, config):
     _N_KEYPOINT = 9
     gt_mask = data['mask'].to(device)
     label = data['label'].to(device)
@@ -27,7 +27,7 @@ def compute_losses(out, data, device):
     pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
     gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
     
-    gt_conf = get_confidence_map(gt_pnts, pos.clone(), _N_KEYPOINT, H, W) # Bx(n_points)xHxW 
+    gt_conf = get_confidence_map(gt_pnts, pos.clone(), config['sigma']) # Bx(n_points)xHxW
     pr_conf = out['bb']
     # pr_conf = bb[batch_idx,cls_idx,:,:,:]# Bx(n_keypoints)xHxW
     loss_bb = F.mse_loss(gt_conf, pr_conf)

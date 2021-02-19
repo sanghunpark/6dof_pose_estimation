@@ -14,7 +14,7 @@ log_freq: 100
 checkpoint_freq: 1000
 
 # training
-batch_size: 32
+batch_size: 16
 num_workers: 4
 max_epochs: 100
 
@@ -24,11 +24,14 @@ beta1: 0.5
 beta2: 0.999
 eps: 0.00000001
 
-# loss weight
-bb_w: 1
+# loss weights & paramters
+cf_w: 1
+pt_w: 1
 vf_w: 1
 sg_w: 1
 cl_w: 1
+
+sigma: 0.1
 
 # network
 rgb_2_vf_seg:
@@ -40,7 +43,7 @@ mlp:
   n_f: 8
   n_blks: 3
 
-bb_net:
+cf_net:
   n_f: 8
   n_updown: 3
   n_res_blks: 2
