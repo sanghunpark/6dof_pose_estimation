@@ -19,13 +19,14 @@ class Trainer:
         self.val_data_loader = val_data_loader
         self.device = device
         self.config = config
-        self.checkpoint_path = config['checkpoints']
+        self.checkpoint_path = config['checkpoint']
         self.checkpoint_dir = os.path.dirname(self.checkpoint_path)              
         self.model = model
         self.optimizer = optimizer
         
-        # weights
-        self.bb_w = config['bb_w']
+        # loss weights
+        self.cf_w = config['cf_w']
+        self.pt_w = config['pt_w']
         self.vf_w = config['vf_w']
         self.sg_w = config['sg_w']    
         self.cl_w = config['cl_w']
@@ -43,26 +44,27 @@ class Trainer:
             iter_bar.reset()
             for i, data in enumerate(self.val_data_loader):
                 loss = self.iterate(data, it, epoch)
-                # tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] loss: {loss.item():.4f}') 
+                tqdm.write(f' [{epoch+1}/{max_epochs}][{i}/{max_iters}] loss: {loss.item():.4f}') 
                 it += 1
                 iter_bar.update()
             epoch_bar.update()
 
     def log(self, mode, losses, it):
-            loss_bb, loss_vf, loss_sg, loss_cl = losses
-            self.logger.add_scalars(mode+'/loss',{'loss_bb': loss_bb,
+            loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = losses
+            self.logger.add_scalars(mode+'/loss',{'loss_cf': loss_cf,
+                                                'loss_pt': loss_pt,
                                                 'loss_vf': loss_vf,
                                                 'loss_sg': loss_sg,
                                                 'loss_cl': loss_cl}, it+1)
 
-    def iterate(self, data, it, epoch):        
-        
-        out = self.model(data['rgb'].to(self.device))        
-        losses = compute_losses(out, data, self.device)
+    def iterate(self, data, it, epoch):
+        out = self.model(data['rgb'].to(self.device))
+        losses = compute_losses(out, data, device=self.device, config=self.config)
 
         # update model
-        loss_bb, loss_vf, loss_sg, loss_cl = losses
-        loss = self.bb_w * loss_bb + \
+        loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = losses
+        loss = self.cf_w * loss_cf + \
+               self.pt_w * loss_pt + \
                self.vf_w * loss_vf + \
                self.sg_w * loss_sg + \
                self.cl_w * loss_cl
@@ -92,22 +94,24 @@ class Trainer:
         with torch.no_grad():
             max_iter = len(self.val_data_loader)
             iter_bar = tqdm(desc='val iter: ', total=max_iter, position=1, leave=True) # for test
-            loss_bb_avg = torch.zeros([1]).to(self.device)
-            loss_vf_avg = torch.zeros([1]).to(self.device)  
-            loss_sg_avg = torch.zeros([1]).to(self.device)  
-            loss_cl_avg = torch.zeros([1]).to(self.device)  
+            loss_cf_avg = torch.zeros([1]).to(self.device)
+            loss_pt_avg = torch.zeros([1]).to(self.device)
+            loss_vf_avg = torch.zeros([1]).to(self.device)
+            loss_sg_avg = torch.zeros([1]).to(self.device)
+            loss_cl_avg = torch.zeros([1]).to(self.device)
                       
             for i, data in enumerate(self.val_data_loader): # for test
                 out = self.model(data['rgb'].to(self.device))
-                loss_bb, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device)
-                loss_bb_avg += loss_bb / max_iter
+                loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device, config=self.config)
+                loss_cf_avg += loss_cf / max_iter
+                loss_pt_avg += loss_pt / max_iter
                 loss_vf_avg += loss_vf / max_iter
                 loss_sg_avg += loss_sg / max_iter
                 loss_cl_avg += loss_cl / max_iter
                 
                 iter_bar.update()
         self.model.train()
-        return [loss_bb_avg, loss_vf_avg, loss_sg_avg, loss_cl_avg]
+        return [loss_cf_avg, loss_vf_avg, loss_sg_avg, loss_cl_avg]
 
     def save(self, it, epoch):
         # create a directory for checkpoints
@@ -139,7 +143,7 @@ class Trainer:
             print(self.checkpoint_path)
             return 0, 0
 
-        # load models
+        # load model and optimizer
         checkpoint = torch.load(self.checkpoint_path, map_location=self.model.device)
         self.model.load_state_dict(checkpoint['model'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
@@ -147,4 +151,17 @@ class Trainer:
         print('[**Notice**] Succeeded to load')
         print(self.checkpoint_path)
         return checkpoint['epoch'], checkpoint['iter']
+
+    @staticmethod
+    def load_weight(checkpoint_path, model): # to load model weights from a checkpoint in test code
+        assert os.path.isfile(checkpoint_path), print('[**Error**] No checkpoint to load!')
+
+        checkpoint = torch.load(checkpoint_path, map_location=model.device)
+        model.load_state_dict(checkpoint['model'])
+        return model
+
+        
+
+
+
 

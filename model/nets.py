@@ -35,7 +35,6 @@ class Encoder(nn.Module):
            x = torch.sum(x, dim=(2,3), keepdim=self.keepdim)
         return x
 
-
 class Decoder(nn.Module):
     def __init__(self, ups, dim, output_dim, n_res_blks, norm, activ, pad_type, upsample=False):
         super(Decoder, self).__init__()
@@ -60,7 +59,6 @@ class Decoder(nn.Module):
         if self.upsample:
             x = F.interpolate(x, scale_factor=2)
         return self.model(x)
-
 
 class Unet(nn.Module): # Unet
     def __init__(self, n_updown, n_res_blks, input_dim, dim, output_dim, norm='none', activ='lrelu', pad_type='zero'):

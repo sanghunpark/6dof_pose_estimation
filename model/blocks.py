@@ -1,5 +1,15 @@
-
 from torch import nn
+
+# DataParallel wappper to save/load network models
+class WappedDataParallel(nn.DataParallel):
+        def __getattr__(self, name):
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self.module, name)
+
+        def state_dict(self, *args):
+            return self.module.state_dict(*args)
 
 class UpdownUnetBlock(nn.Module):
     def __init__(self, in_dim, out_dim, ks, st, pad, norm='none', activation='lrelu', pad_type='zero', updown='up', use_bias=True):
@@ -38,8 +48,6 @@ class UpdownResBlock(nn.Module):
     
     def forward(self, x):
         return self.model(x)
-
-
 
 class ResBlocks(nn.Module):
     def __init__(self, num_blocks, dim, norm, activation, pad_type):

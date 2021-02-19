@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import kornia
 
 # My library
-from utils.utils import get_confidence_map, get_vector_field
+from utils.utils import get_confidence_map, get_keypoints, get_vector_field
     
 def compute_losses(out, data, device, config):
     _N_KEYPOINT = 9
@@ -19,24 +19,27 @@ def compute_losses(out, data, device, config):
     batch_idx = torch.LongTensor(range(B)).to(device)
     cls_idx = label[:,0].long() # B
 
-    ## loss for segmentation mask    
-    pr_mask = sg[batch_idx,cls_idx,:,:].unsqueeze(1)
-    loss_sg = F.mse_loss(gt_mask, pr_mask)
-
-    ## loss for boudding box corners
+    ## loss for confidence map 
     pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
     gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
     
     gt_conf = get_confidence_map(gt_pnts, pos.clone(), config['sigma']) # Bx(n_points)xHxW
-    pr_conf = out['bb']
-    # pr_conf = bb[batch_idx,cls_idx,:,:,:]# Bx(n_keypoints)xHxW
-    loss_bb = F.mse_loss(gt_conf, pr_conf)
+    pr_conf = out['cf']
+    # pr_conf = cf[batch_idx,cls_idx,:,:,:]# Bx(n_keypoints)xHxW
+    loss_cf = F.mse_loss(gt_conf, pr_conf)
 
+    ## loss for keypoints of a bounding box
+    pr_pnts = get_keypoints(pr_conf)
+    loss_pt = F.mse_loss(gt_pnts, pr_pnts)
 
     ## loss for vector field
     pr_vf = out['vf']
     gt_vf = get_vector_field(gt_pnts, pos.clone(), gt_mask).view(B, 2*_N_KEYPOINT, H, W)
     loss_vf = F.mse_loss(gt_vf, pr_vf)
+
+    ## loss for segmentation mask    
+    pr_mask = sg[batch_idx,cls_idx,:,:].unsqueeze(1)
+    loss_sg = F.mse_loss(gt_mask, pr_mask)
 
     ## loss for class confidence
     pr_cls = out['cl']
@@ -44,7 +47,7 @@ def compute_losses(out, data, device, config):
     gt_cls.scatter_(1, cls_idx.unsqueeze(-1), 1) # one-hot encoding
     loss_cl = F.mse_loss(gt_cls, pr_cls)
 
-    return [loss_bb, loss_vf, loss_sg, loss_cl]
+    return [loss_cf, loss_pt, loss_vf, loss_sg, loss_cl]
 
-# def bb_loss(gt, pr):    
+# def cf_loss(gt, pr):    
 #     return F.mse_loss(gt, pr)

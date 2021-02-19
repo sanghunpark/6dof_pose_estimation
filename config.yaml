@@ -1,5 +1,5 @@
 # path
-checkpoints: ./checkpoint/bvs1/model_00000000.pt
+checkpoint: ./checkpoint/cf_pt_vf_sg_cl_3/model_00000000.pt
 
 # data
 data_root: ./data/LINEMOD

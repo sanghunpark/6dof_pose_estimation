@@ -2,7 +2,7 @@ import torch
 
 # OpenPose Eq(7)
 # https://arxiv.org/abs/1812.08008
-def get_confidence_map(x, p, n_keypoints, H, W): # x: ground truth (9x2) [0,1]
+def get_confidence_map(x, p, sigma): # x: ground truth (Bx9x2) [0,1]
     # p = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
     x = x.unsqueeze(-1).unsqueeze(-1) 
     p = p.unsqueeze(0)
@@ -13,6 +13,15 @@ def get_confidence_map(x, p, n_keypoints, H, W): # x: ground truth (9x2) [0,1]
 def get_vector_field(x, p, mask):
     B, C, H, W = mask.size()
     # p = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # [-1,1] > [0, 1]
-    x = x.unsqueeze(-1).unsqueeze(-1) # Bx(n_keypoins)x2x1x1
+    x = x.unsqueeze(-1).unsqueeze(-1) # Bx(n_points)x2x1x1
     p = p.unsqueeze(1) # Bx1x2xHxW
     return (x-p)/ torch.linalg.norm(x-p, ord=2, dim=2, keepdim=True)
+
+def get_keypoints(confidence_map): # Bx(n_point)xHxW->Bx(n_points)x2
+    B, C, H, W = confidence_map.size()
+    m = confidence_map.view(B*C, -1).argmax(dim=1).view(B,C,1) # find locations of max value in 1-dimension
+    return torch.cat((m // H, m % H), dim=2) # Indices (x,y) of max values, Bx(n_points)x2
+
+
+
+

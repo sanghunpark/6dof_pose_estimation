@@ -4,6 +4,7 @@ import torch
 
 # My library
 from model.nets import Encoder, Decoder, Unet, MLP
+
 class PoseNet(nn.Module):
     def __init__(self, config, device):
         super(PoseNet, self).__init__()
@@ -50,12 +51,12 @@ class PoseNet(nn.Module):
             global_pool=True)
         
         ### 2-stage
-        self.bb_net = Unet(
-            n_updown=config['bb_net']['n_updown'],
-            n_res_blks=config['bb_net']['n_res_blks'],
+        self.cf_net = Unet(
+            n_updown=config['cf_net']['n_updown'],
+            n_res_blks=config['cf_net']['n_res_blks'],
             input_dim=1 + 2*self.n_keypoint, # segment for each object (1) + vector fields (2*number of keypoints)
-            dim=config['bb_net']['n_f'],
-            output_dim=self.n_keypoint, # confidence map for each 2D bouding box corner (2*number of keypoints) like OpenPose
+            dim=config['cf_net']['n_f'],
+            output_dim=self.n_keypoint, # confidence maps (number of keypoints) for each 2D bouding box corner like OpenPose
             norm='in',
             activ='relu',
             pad_type='reflect')
@@ -72,12 +73,12 @@ class PoseNet(nn.Module):
         batch_idx = torch.LongTensor(range(B)).to(self.device)
         cls_idx = torch.argmax(cl, dim=1).to(self.device)
         sg_1 = sg[batch_idx,cls_idx,:,:].unsqueeze(1)
-        bb = self.bb_net(torch.cat((sg_1, vf), dim=1))
+        cf = self.cf_net(torch.cat((sg_1, vf), dim=1))
 
-        # bb = torch.zeros(B, self.n_class, self.n_keypoint, H, W).to(self.device) # Bx(n_class)xx(n_keypoints)xHxW
+        # cf = torch.zeros(B, self.n_class, self.n_keypoint, H, W).to(self.device) # Bx(n_class)xx(n_keypoints)xHxW
         # for c in range(self.n_class):
-        #     bb[batch_idx,c:c+1,:,:,:] = self.bb_net(torch.cat((sg[:,c:c+1,:,:], vf), dim=1)) # Bx(1)x(n_keypoints)xHxW
-        return {'bb':bb, 'vf': vf, 'sg': sg, 'cl':cl}
+        #     cf[batch_idx,c:c+1,:,:,:] = self.cf_net(torch.cat((sg[:,c:c+1,:,:], vf), dim=1)) # Bx(1)x(n_keypoints)xHxW
+        return {'cf': cf, 'vf': vf, 'sg': sg, 'cl': cl}
 
 
 

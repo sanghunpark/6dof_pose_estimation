@@ -1,14 +1,20 @@
 ## PyTorch
-# pip install torch==1.7.1+cu101 torchvision==0.8.2+cu101 torchaudio===0.7.2 -f https://download.pytorch.org/whl/torch_stable.html
+# conda install pytorch torchvision torchaudio cudatoolkit=11.0 -c pytorch
 
 ## training log
 tensorboard
 
 ## config file loader
-pyyaml==5.1.2
+pyyaml
 
-## visualizing loader
+## progress bar
 tqdm 
 
-## make mesh grid
+## mesh grid
 kornia
+
+## visualization
+matplotlib
+
+## vision
+opencv-python
