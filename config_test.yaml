@@ -10,8 +10,8 @@ n_class: 3
 img_size: 672
 
 # log frequency
-log_freq: 100
-checkpoint_freq: 1000
+log_freq: 10
+checkpoint_freq: 1
 
 # training
 batch_size: 2

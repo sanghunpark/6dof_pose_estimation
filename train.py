@@ -60,9 +60,11 @@ def train(args, config):
                             config['beta2']),
                             eps=config['eps'])
 
+    test_data = next(iter(val_data_loader))
     trainer = Trainer(config=config,
                       train_data_loader=train_data_loader,
                       val_data_loader=val_data_loader,
+                      test_data=test_data,
                       device=device,
                       model=model,
                       optimizer=optimizer)

@@ -12,11 +12,12 @@ from tqdm import tqdm
 
 # My library
 from utils.loss import compute_losses
-
+from utils.utils import draw_keypoints, get_keypoints
 class Trainer:
-    def __init__(self, train_data_loader, val_data_loader, device, model, optimizer, config):
+    def __init__(self, train_data_loader, val_data_loader, test_data, device, model, optimizer, config):
         self.train_data_loader = train_data_loader
         self.val_data_loader = val_data_loader
+        # self.test_data = test_data/
         self.device = device
         self.config = config
         self.checkpoint_path = config['checkpoint']
@@ -28,7 +29,7 @@ class Trainer:
         self.cf_w = config['cf_w']
         self.pt_w = config['pt_w']
         self.vf_w = config['vf_w']
-        self.sg_w = config['sg_w']    
+        self.sg_w = config['sg_w']
         self.cl_w = config['cl_w']
 
         checkpoint_dir_name = os.path.basename(self.checkpoint_dir)
@@ -50,12 +51,12 @@ class Trainer:
             epoch_bar.update()
 
     def log(self, mode, losses, it):
-            loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = losses
-            self.logger.add_scalars(mode+'/loss',{'loss_cf': loss_cf,
-                                                'loss_pt': loss_pt,
-                                                'loss_vf': loss_vf,
-                                                'loss_sg': loss_sg,
-                                                'loss_cl': loss_cl}, it+1)
+        loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = losses
+        self.logger.add_scalars(mode+'/loss',{'loss_cf': loss_cf,
+                                            'loss_pt': loss_pt,
+                                            'loss_vf': loss_vf,
+                                            'loss_sg': loss_sg,
+                                            'loss_cl': loss_cl}, it+1)
 
     def iterate(self, data, it, epoch):
         out = self.model(data['rgb'].to(self.device))
@@ -79,39 +80,66 @@ class Trainer:
         
         # log val losses & save model
         if (it+1) % self.config['checkpoint_freq'] == 0:
-            losses = self.val()            
-            self.log('val', losses, it)
-                        
-            test_data = next(iter(self.val_data_loader))
-            dummy_img = vutils.make_grid(test_data['rgb'], normalize=True) # dummy
-            self.logger.add_image('dummy_img', dummy_img, it+1)            
+            losses = self.val(it)            
+            self.log('val', losses, it)         
             self.save(it+1, epoch)
         
         return loss
 
-    def val(self):
+    def val(self, it):
         self.model.eval()
+        
         with torch.no_grad():
-            max_iter = len(self.val_data_loader)
-            iter_bar = tqdm(desc='val iter: ', total=max_iter, position=1, leave=True) # for test
-            loss_cf_avg = torch.zeros([1]).to(self.device)
-            loss_pt_avg = torch.zeros([1]).to(self.device)
-            loss_vf_avg = torch.zeros([1]).to(self.device)
-            loss_sg_avg = torch.zeros([1]).to(self.device)
-            loss_cl_avg = torch.zeros([1]).to(self.device)
+            ## get losses with validation data
+            # max_iter = len(self.val_data_loader)
+            # iter_bar = tqdm(desc='val iter: ', total=max_iter, position=1, leave=True) # for test
+            # loss_cf = torch.zeros([1]).to(self.device)
+            # loss_pt = torch.zeros([1]).to(self.device)
+            # loss_vf = torch.zeros([1]).to(self.device)
+            # loss_sg = torch.zeros([1]).to(self.device)
+            # loss_cl = torch.zeros([1]).to(self.device)
                       
-            for i, data in enumerate(self.val_data_loader): # for test
-                out = self.model(data['rgb'].to(self.device))
-                loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device, config=self.config)
-                loss_cf_avg += loss_cf / max_iter
-                loss_pt_avg += loss_pt / max_iter
-                loss_vf_avg += loss_vf / max_iter
-                loss_sg_avg += loss_sg / max_iter
-                loss_cl_avg += loss_cl / max_iter
-                
-                iter_bar.update()
+            # for i, data in enumerate(self.val_data_loader): # for test
+            #     out = self.model(data['rgb'].to(self.device))
+            #     loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device, config=self.config)
+            #     loss_cf += loss_cf / max_iter
+            #     loss_pt += loss_pt / max_iter
+            #     loss_vf += loss_vf / max_iter
+            #     loss_sg += loss_sg / max_iter
+            #     loss_cl += loss_cl / max_iter                
+            #     iter_bar.update()
+
+            ## simple validation
+            data = next(iter(self.val_data_loader))
+            out = self.model(data['rgb'].to(self.device))
+            loss_cf, loss_pt, loss_vf, loss_sg, loss_cl = compute_losses(out, data, device=self.device, config=self.config)
+
+            # log images
+            rgb = data['rgb']
+            out = self.model(rgb.to(self.device))
+
+            # confidence map
+            B, n_pts, H, W = out['cf'].size() # Bx(n_points)xHxW
+            self.logger.add_images('confidence', out['cf'].view(-1, 1, H, W), it+1)
+
+            # segmentation
+            B, n_cls, H, W = out['sg'].size() # Bx(n_class)xHxW
+            self.logger.add_images('Segmentation', out['sg'].view(-1, 1, H, W), it+1)
+
+            label = self.test_data['label'].to(self.device)
+            gt_pnts = label[:,1:2*n_pts +1].view(-1, n_pts, 2) # Bx(2*n_points+3) > Bx(n_points)x2
+            pr_pnts = get_keypoints(out['cf'])
+            
+            imgs = draw_keypoints(rgb, gt_pnts, pr_pnts)
+            self.logger.add_images('Keypoints', imgs, it+1)
+
+
+            # out['pt'] # Bx(n_points)xHxW 
+            # out['vf'] # Bx(2*n_points)xHxW            
+            # out['cl'] # Bx(n_class)
+
         self.model.train()
-        return [loss_cf_avg, loss_vf_avg, loss_sg_avg, loss_cl_avg]
+        return [loss_cf, loss_pt, loss_vf, loss_sg, loss_cl]
 
     def save(self, it, epoch):
         # create a directory for checkpoints
@@ -159,9 +187,3 @@ class Trainer:
         checkpoint = torch.load(checkpoint_path, map_location=model.device)
         model.load_state_dict(checkpoint['model'])
         return model
-
-        
-
-
-
-
