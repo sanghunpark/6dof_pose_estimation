@@ -22,7 +22,7 @@ def get_vector_field(x, p, mask):
 def get_keypoints(confidence_map): # Bx(n_point)xHxW->Bx(n_points)x2
     B, C, H, W = confidence_map.size()
     m = confidence_map.view(B*C, -1).argmax(dim=1).view(B,C,1) # find locations of max value in 1-dimension
-    return torch.cat((m // H, m % H), dim=2) # Indices (x,y) of max values, Bx(n_points)x2
+    return torch.cat((m % H, m // H), dim=2) # Indices (x, y) of max values, Bx(n_points)x2
 
 def draw_keypoints(rgb, gt_pnts, pr_pnts):
     B, _, H, W = rgb.size()

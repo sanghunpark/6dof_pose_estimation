@@ -1,5 +1,5 @@
 # path
-checkpoint: ./checkpoint/cf_pt_vf_sg_cl_3/model_00000000.pt
+checkpoint: ./checkpoint/train4/model_00000000.pt
 
 # data
 data_root: ./data/LINEMOD
@@ -31,7 +31,7 @@ vf_w: 1
 sg_w: 1
 cl_w: 1
 
-sigma: 0.1
+sigma: 0.4
 
 # network
 rgb_2_vf_seg:
