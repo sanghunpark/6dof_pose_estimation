@@ -1,20 +1,20 @@
 # path
-checkpoint: ./checkpoint/sanghun5/model_00067000.pt
+checkpoint: ./checkpoint/train6/model_00070000.pt
 
 # data
-data_root: ./data/SANGHUN
-n_class: 3
+data_root: ./data/LINEMOD
+n_class: 13
 
 # data_root: ./data/TEST
 # n_class: 3
-img_size: 336
+img_size: 672
 
 # log frequency
 log_freq: 100
 checkpoint_freq: 1000
 
 # training
-batch_size: 16
+batch_size: 4
 num_workers: 4
 max_epochs: 100
 
@@ -35,16 +35,16 @@ sigma: 0.4
 
 # network
 rgb_2_vf_seg:
-  n_f: 8
+  n_f: 16
   n_down: 3
   n_res_blks: 2
 
 mlp:
-  n_f: 8
+  n_f: 16
   n_blks: 3
 
 cf_net:
-  n_f: 8
+  n_f: 16
   n_updown: 3
   n_res_blks: 2
 
