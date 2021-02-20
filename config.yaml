@@ -1,5 +1,5 @@
 # path
-checkpoint: ./checkpoint/train5/model_00000000.pt
+checkpoint: ./checkpoint/train5/model_00067000.pt
 
 # data
 data_root: ./data/LINEMOD
@@ -47,3 +47,6 @@ cf_net:
   n_f: 8
   n_updown: 3
   n_res_blks: 2
+
+# test
+k: 10 # k-samples for hough voting

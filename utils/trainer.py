@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 # My library
 from utils.loss import compute_losses
-from utils.utils import draw_keypoints, get_keypoints
+from utils.utils import draw_keypoints, get_keypoints_cf
 class Trainer:
     def __init__(self, train_data_loader, val_data_loader, test_data, device, model, optimizer, config):
         self.train_data_loader = train_data_loader
@@ -128,11 +128,10 @@ class Trainer:
 
             label = data['label'].to(self.device)
             gt_pnts = label[:,1:2*n_pts +1].view(-1, n_pts, 2) # Bx(2*n_points+3) > Bx(n_points)x2
-            pr_pnts = get_keypoints(out['cf'])
+            pr_pnts = get_keypoints_cf(out['cf'])
             
             imgs = draw_keypoints(rgb, gt_pnts, pr_pnts)
             self.logger.add_images('Keypoints', imgs, it+1)
-
 
             # out['pt'] # Bx(n_points)xHxW 
             # out['vf'] # Bx(2*n_points)xHxW            
