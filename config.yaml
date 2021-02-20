@@ -1,9 +1,9 @@
 # path
-checkpoint: ./checkpoint/train5/model_00067000.pt
+checkpoint: ./checkpoint/sanghun5/model_00067000.pt
 
 # data
-data_root: ./data/LINEMOD
-n_class: 13
+data_root: ./data/SANGHUN
+n_class: 3
 
 # data_root: ./data/TEST
 # n_class: 3
