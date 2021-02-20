@@ -11,6 +11,9 @@ class WappedDataParallel(nn.DataParallel):
         def state_dict(self, *args):
             return self.module.state_dict(*args)
 
+        def load_state_dict(self, *args):
+            return self.module.load_state_dict(*args)
+
 class UpdownUnetBlock(nn.Module):
     def __init__(self, in_dim, out_dim, ks, st, pad, norm='none', activation='lrelu', pad_type='zero', updown='up', use_bias=True):
         super(UpdownUnetBlock, self).__init__()

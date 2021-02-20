@@ -126,7 +126,7 @@ class Trainer:
             B, n_cls, H, W = out['sg'].size() # Bx(n_class)xHxW
             self.logger.add_images('Segmentation', out['sg'].view(-1, 1, H, W), it+1)
 
-            label = self.test_data['label'].to(self.device)
+            label = data['label'].to(self.device)
             gt_pnts = label[:,1:2*n_pts +1].view(-1, n_pts, 2) # Bx(2*n_points+3) > Bx(n_points)x2
             pr_pnts = get_keypoints(out['cf'])
             
