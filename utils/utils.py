@@ -22,7 +22,7 @@ def get_vector_field(x, p, mask):
 def get_keypoints(confidence_map): # Bx(n_point)xHxW->Bx(n_points)x2
     B, C, H, W = confidence_map.size()
     m = confidence_map.view(B*C, -1).argmax(dim=1).view(B,C,1) # find locations of max value in 1-dimension
-    return torch.cat((m % H, m // H), dim=2) # Indices (x, y) of max values, Bx(n_points)x2
+    return torch.cat(((m % H)/W, (m // H)/H), dim=2) # Indices (x, y) of max values, Bx(n_points)x2, return position [0~1]
 
 def draw_keypoints(rgb, gt_pnts, pr_pnts):
     B, _, H, W = rgb.size()
@@ -30,14 +30,14 @@ def draw_keypoints(rgb, gt_pnts, pr_pnts):
     imgs = np.array(imgs)
     B, n_pnts, _ = pr_pnts.size()
     for b in range(B):
-        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_BGR2RGB)
+        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
         for i in range(n_pnts):
             x, y = gt_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 8, (0,255,0), 1)
+            img = cv.circle(img, (x*W, y*H), 8, ((i+1)/9, (10-i)/9, (10-i)/9), 2)
             x, y = pr_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 5, (0,0,255), -1)
-            
-        imgs[b] = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+            img = cv.circle(img, (x*W, y*H), 3, ((i+1)/9, (10-i)/9, (0-i)/9), -1)
+        imgs[b] = img
+        # imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
     return imgs.transpose((0, 3, 1, 2))
             

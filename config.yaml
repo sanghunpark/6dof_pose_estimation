@@ -1,5 +1,5 @@
 # path
-checkpoint: ./checkpoint/train4/model_00000000.pt
+checkpoint: ./checkpoint/train5/model_00000000.pt
 
 # data
 data_root: ./data/LINEMOD

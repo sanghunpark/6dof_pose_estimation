@@ -13,6 +13,10 @@ from model.posenet import PoseNet
 from model.blocks import WappedDataParallel
 from utils.trainer import Trainer
 from utils.config import options
+from utils.utils import draw_keypoints, get_keypoints
+
+# 
+import cv2 as cv
 
 def test(args, config):
     data_root = config['data_root']
@@ -43,8 +47,23 @@ def test(args, config):
                                     drop_last=True)
 
     for idx, data in enumerate(val_data_loader):
-        out = model(data['rgb'].to(device))
+        _N_KEYPOINT = 9
+        rgb = data['rgb'].to(device)
+        out = model(rgb)
         pr_conf = out['cf']
+        
+        # compute keypoints from confidence map
+        label = data['label'].to(device)
+        gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
+        pr_pnts = get_keypoints(pr_conf)
+
+        imgs = draw_keypoints(rgb, gt_pnts, pr_pnts)
+        cv.imshow('ret', imgs[0].transpose(1,2,0))
+
+        # compute key points from vector fields
+
+        cv.waitKey(0)
+
 
     
 if __name__ == '__main__':
