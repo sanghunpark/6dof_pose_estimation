@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 
 # etc
 from PIL import Image
+import json
 
 class Linemod(Dataset):
     def __init__(self, root, n_class, split = 'train', shuffle = True, transform = None) -> None:
@@ -49,13 +50,13 @@ class Linemod(Dataset):
         # filter folders by 'objects'
         all_object_list = os.listdir(self.root)
         # if len(objects) == 0:
-        object_list = all_object_list[:n_class]
+        self.object_list = all_object_list[:n_class]
         # else:
         #     object_list = set.intersection(set(objects), set(all_object_list))
         
         # make a list of data path
         data_path = []
-        for idx, obj in enumerate(object_list):
+        for idx, obj in enumerate(self.object_list):
             data_file = os.path.join(self.root, obj, split + '.txt')
             if not (os.path.isfile(data_file)):
                 continue
@@ -72,3 +73,20 @@ class Linemod(Dataset):
             return label
         else:
             return np.array([])
+
+    def get_mesh_file(self, idx):
+        obj = self.object_list[idx]
+        return os.path.join(self.root, obj, obj+'.ply')
+
+    def get_camera_info(self, idx):
+        obj = self.object_list[idx]
+        file_name = os.path.join(self.root, obj, 'intrinsics.json')
+        with open(file_name) as json_file:
+            json_data = json.load(json_file)
+            fx = float(json_data["fx"])
+            fy = float(json_data["fy"])
+            ppx = float(json_data["ppx"])
+            ppy = float(json_data["ppy"])
+        return ppx, ppy, fx, fy
+    
+

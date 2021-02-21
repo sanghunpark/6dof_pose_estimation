@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import random
 import cv2 as cv
-
+import json
 
 # OpenPose Eq(7)
 # https://arxiv.org/abs/1812.08008
@@ -82,7 +82,49 @@ def get_keypoints_vf(vector_field, obj_seg, p, k):
     val, m = score.max(dim=2, keepdim=True)
     return torch.cat(((m % H)/W, (m // H)/H), dim=2) # predicted keypoints of 2D bouding box (x, y) [0, 1]
 
+## SingleShotPose
+def get_3D_corners(vertices):    
+    min_x = np.min(vertices[0,:])
+    max_x = np.max(vertices[0,:])
+    min_y = np.min(vertices[1,:])
+    max_y = np.max(vertices[1,:])
+    min_z = np.min(vertices[2,:])
+    max_z = np.max(vertices[2,:])
+    corners = np.array([[min_x, min_y, min_z],
+                        [min_x, min_y, max_z],
+                        [min_x, max_y, min_z],
+                        [min_x, max_y, max_z],
+                        [max_x, min_y, min_z],
+                        [max_x, min_y, max_z],
+                        [max_x, max_y, min_z],
+                        [max_x, max_y, max_z]])
+    corners = np.concatenate((np.transpose(corners), np.ones((1,8)) ), axis=0)
+    return corners
 
+def pnp(points_3D, points_2D, cameraMatrix):
+    try:
+        distCoeffs = pnp.distCoeffs
+    except:
+        distCoeffs = np.zeros((8, 1), dtype='float32') 
 
+    assert points_3D.shape[0] == points_2D.shape[0], 'points 3D and points 2D must have same number of vertices'
+
+    _, R_exp, t = cv.solvePnP(points_3D,
+                              np.ascontiguousarray(points_2D[:,:2]).reshape((-1,1,2)),
+                              cameraMatrix,
+                              distCoeffs)                            
+
+    R, _ = cv.Rodrigues(R_exp)
+    return R, t
+
+def get_camera_intrinsic(u0, v0, fx, fy):
+    return np.array([[fx, 0.0, u0], [0.0, fy, v0], [0.0, 0.0, 1.0]])
+
+def compute_projection(points_3D, transformation, internal_calibration):
+    projections_2d = np.zeros((2, points_3D.shape[1]), dtype='float32')
+    camera_projection = (internal_calibration.dot(transformation)).dot(points_3D)
+    projections_2d[0, :] = camera_projection[0, :]/camera_projection[2, :]
+    projections_2d[1, :] = camera_projection[1, :]/camera_projection[2, :]
+    return projections_2d
 
 
