@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import kornia
 
 # My library
-from utils.utils import get_confidence_map, get_keypoints_vf, get_vector_field
+from utils.utils import get_confidence_map, compute_2D_points, get_vector_field
     
 def compute_losses(out, data, device, config):
     _N_KEYPOINT = 9
@@ -45,7 +45,8 @@ def compute_losses(out, data, device, config):
     
     ## loss for keypoints of a bounding box
     pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
-    pr_pnts = get_keypoints_vf(pr_vf, pr_mask, pos, config['k'], pr_conf)
+    pr_pnts = compute_2D_points(out, device, config, mode='vf_cf')
+    # pr_pnts = get_keypoints_vf(pr_vf, pr_mask, pos, config['k'], pr_conf)
     loss_pt = F.mse_loss(gt_pnts, pr_pnts)
 
 

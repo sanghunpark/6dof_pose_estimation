@@ -37,33 +37,36 @@ def get_keypoints_vf(vector_field, obj_seg, p, k, confidence=None):
     ''' vector_field: Bx(2*n_pnts)xHxW '''
     ''' segmentation: Bx(n_objects=1)xHxW '''
     # normalize segmentation
+    # p: # (B:1)x2xHxW
     B, n_cls, H, W = obj_seg.size() # Bx(n_cls=1)xHxW
     B, C, H, W = vector_field.size() # Bx(2*n_pnts)xHxW
     n_pnts = int(C/2)
     obj_seg = obj_seg.view(B, n_cls, -1)
     obj_seg -= torch.min(obj_seg, dim=2, keepdim=True)[0]
     obj_seg /= torch.max(obj_seg, dim=2, keepdim=True)[0]
-    obj_seg = obj_seg.view(B, n_cls, H, W)
+    obj_seg = obj_seg.view(B, 1, 1, H, W)
     mask = (obj_seg > 0.5)
 
     # mask vector fields by oject segmentation
     vector_field = vector_field.view(B,n_pnts,2,H,W)
     mask = mask.expand_as(vector_field)
     vf = torch.masked_select(vector_field, mask).view(B,n_pnts,2,-1).unsqueeze(-2) # Bx(n_pnts)x2x1x(n_sample)
-    vf_pos = torch.masked_select(p, mask).view(B,n_pnts,2,-1).unsqueeze(-2) # Bx(n_pnts)x2x1x(n_sample)
-    x_pos = p.unsqueeze(1).reshape(1,1,2,H*W).unsqueeze(-1) # (B:1)x(1)x2x(HxW)x(n_sample:1)
+    vf_pos = torch.masked_select(p, mask).view(B,n_pnts,2,-1).unsqueeze(-2) # Bx(n_pnts)x2x1x(n_sample)    
+    x_pos = p.unsqueeze(0).reshape(1,1,2,H*W).unsqueeze(-1) # (B:1)x(n_pnts:1)x2x(HxW)x(n_sample:1)    
 
     n_sample = vf.size(-1)
     k = min(n_sample, k)
     k_idx = random.sample(range(n_sample), k)
     vf = vf[:,:,:,:,k_idx] # sample for hough voting
-    vf_pos = vf_pos[:,:,:,:,k_idx]
+    vf_pos = vf_pos[:,:,:,:,k_idx] 
+    x_pos = x_pos.expand(B,1,2,H*W,k)
     
     # compute cosine similarity (hough voting manner)
     diff = x_pos - vf_pos # Bxn_pntsx2x(HxW)x(k)
     diff_norm = torch.linalg.norm(diff, ord=2, dim=2, keepdim=True)
     dot = vf[:,:,0:1,:,:]*diff[:,:,0:1,:,:] + vf[:,:,1:2,:,:]*diff[:,:,1:2,:,:]
-    score = torch.div(dot, diff_norm+ +sys.float_info.epsilon) # to avoid dividing by zero
+    score = torch.div(dot, diff_norm+sys.float_info.epsilon) # to avoid dividing by zero
+
     if confidence is not None:
         score = torch.sum(score, dim=4).squeeze(2) * confidence.view(B, n_pnts, -1)
     else:
