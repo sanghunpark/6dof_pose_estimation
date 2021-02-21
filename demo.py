@@ -57,10 +57,10 @@ def demo(args, config, dim='2D', mode='vf'):
         # rgb = torch.Tensor(frame).permute(2,0,1).unsqueeze(0).to(device)        
         out = model(rgb)
         if dim == '2D':
-            pr_pnts = compute_2D_points(rgb, out, device, config)
+            pr_pnts = compute_2D_points(rgb, out, device, config, mode)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
-            proj_2d_pr = compute_3D_points(dataset, out, device, config, 'cf')       
+            proj_2d_pr = compute_3D_points(dataset, out, device, config, mode)       
             pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)
 
         # draw 2D points 

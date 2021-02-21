@@ -65,10 +65,10 @@ def test(args, config, dim='2D', mode='vf'):
         gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
         
         if dim == '2D':
-            pr_pnts = compute_2D_points(rgb, out, device, config)
+            pr_pnts = compute_2D_points(rgb, out, device, config, mode)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
-            proj_2d_pr = compute_3D_points(dataset, out, device, config, 'cf')       
+            proj_2d_pr = compute_3D_points(dataset, out, device, config, mode)       
             pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)            
 
         # draw 2D points 
@@ -78,7 +78,6 @@ def test(args, config, dim='2D', mode='vf'):
         img = draw_bouding_box(img, gt_pnts, color=(0,1,0))
         img = draw_bouding_box(img, pr_pnts, color=(1,0,0))
         img = cv.resize(img, dsize=(config['img_size'], config['img_size']), interpolation=cv.INTER_AREA)
-
 
         # segmentation
         cls_idx = torch.argmax(out['cl'], dim=1).to(device)

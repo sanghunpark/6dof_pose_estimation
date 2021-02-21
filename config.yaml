@@ -30,7 +30,6 @@ pt_w: 1
 vf_w: 1
 sg_w: 1
 cl_w: 1
-
 sigma: 0.4
 
 # network
