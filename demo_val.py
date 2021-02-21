@@ -65,7 +65,7 @@ def test(args, config, dim='2D', mode='vf'):
         gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
         
         if dim == '2D':
-            pr_pnts = compute_2D_points(rgb, out, device, config, mode)
+            pr_pnts = compute_2D_points(out, device, config, mode)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
             proj_2d_pr = compute_3D_points(dataset, out, device, config, mode)       
@@ -88,17 +88,17 @@ def test(args, config, dim='2D', mode='vf'):
 
         ax[0][0].imshow(img)
         ax[0][0].set_xlabel('Predicted Bounding Box (Red:Predict, Green:GT)')
-        ax[0][1].imshow(sg_1.permute(1,2,0).detach().numpy())
+        ax[0][1].imshow(sg_1.permute(1,2,0).cpu().detach().numpy())
         ax[0][1].set_xlabel('segmentation of ' + obj_name)
-        ax[0][2].imshow(out['cf'][0,0:1,:,:].permute(1,2,0).detach().numpy())
+        ax[0][2].imshow(out['cf'][0,0:1,:,:].permute(1,2,0).cpu().detach().numpy())
         ax[0][2].set_xlabel('confidence map (Centroid keypoint)')
 
         ax[1][0].imshow(text)
         ax[1][0].text(40, config['img_size']/2+20, obj_name, fontsize=40)
         ax[1][0].set_xlabel('classification')        
-        ax[1][1].imshow(out['vf'][0,0:1,:,:].permute(1,2,0).detach().numpy())
+        ax[1][1].imshow(out['vf'][0,0:1,:,:].permute(1,2,0).cpu().detach().numpy())
         ax[1][1].set_xlabel('Vector field-X (Centroid keypoint)') 
-        ax[1][2].imshow(out['vf'][0,1:2,:,:].permute(1,2,0).detach().numpy())
+        ax[1][2].imshow(out['vf'][0,1:2,:,:].permute(1,2,0).cpu().detach().numpy())
         ax[1][2].set_xlabel('Vector field-Y (Centroid keypoint)') 
 
         # plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
@@ -113,4 +113,4 @@ if __name__ == '__main__':
     test(args,
          config,
          dim='2D',
-         mode='cf')
+         mode='cf_vf')

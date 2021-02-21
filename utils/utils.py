@@ -33,42 +33,7 @@ def get_keypoints_cf(confidence_map): # Bx(n_point)xHxW->Bx(n_points)x2
     m = confidence_map.view(B*C, -1).argmax(dim=1).view(B,C,1) # find locations of max value in 1-dimension
     return torch.cat(((m % H)/W, (m // H)/H), dim=2) # Indices (x, y) of max values, Bx(n_points)x2, return position [0,1]
 
-def get_keypoints_vf(vector_field, obj_seg, p, k):
-    ''' vector_field: Bx(2*n_pnts)xHxW '''
-    ''' segmentation: Bx(n_objects=1)xHxW '''
-    # normalize segmentation
-    B, n_cls, H, W = obj_seg.size() # Bx(n_cls=1)xHxW
-    B, C, H, W = vector_field.size() # Bx(2*n_pnts)xHxW
-    n_pnts = int(C/2)
-    obj_seg = obj_seg.view(B, n_cls, -1)
-    obj_seg -= torch.min(obj_seg, dim=2, keepdim=True)[0]
-    obj_seg /= torch.max(obj_seg, dim=2, keepdim=True)[0]
-    obj_seg = obj_seg.view(B, n_cls, H, W)
-    mask = (obj_seg > 0.5)
-
-    # mask vector fields by oject segmentation
-    vector_field = vector_field.view(B,n_pnts,2,H,W)
-    mask = mask.expand_as(vector_field)
-    vf = torch.masked_select(vector_field, mask).view(B,n_pnts,2,-1).unsqueeze(-2) # Bx(n_pnts)x2x1x(n_sample)
-    vf_pos = torch.masked_select(p, mask).view(B,n_pnts,2,-1).unsqueeze(-2) # Bx(n_pnts)x2x1x(n_sample)
-    x_pos = p.unsqueeze(1).reshape(1,1,2,H*W).unsqueeze(-1) # (B:1)x(1)x2x(HxW)x(n_sample:1)
-
-    n_sample = vf.size(-1)
-    k = min(n_sample, k)
-    k_idx = random.sample(range(n_sample), k)
-    vf = vf[:,:,:,:,k_idx] # sample for hough voting
-    vf_pos = vf_pos[:,:,:,:,k_idx]
-    
-    # compute cosine similarity (hough voting manner)
-    diff = x_pos - vf_pos # Bxn_pntsx2x(HxW)x(k)
-    diff_norm = torch.linalg.norm(diff, ord=2, dim=2, keepdim=True)
-    dot = vf[:,:,0:1,:,:]*diff[:,:,0:1,:,:] + vf[:,:,1:2,:,:]*diff[:,:,1:2,:,:]
-    score = torch.div(dot, diff_norm+sys.float_info.epsilon) # to avoid dividing by zero
-    score = torch.sum(score, dim=4).squeeze(2)
-    val, m = score.max(dim=2, keepdim=True)
-    return torch.cat(((m % H)/W, (m // H)/H), dim=2) # predicted keypoints of 2D bouding box (x, y) [0, 1]
-
-def get_keypoints_cf_vf(confidence, vector_field, obj_seg, p, k):
+def get_keypoints_vf(vector_field, obj_seg, p, k, confidence=None):
     ''' vector_field: Bx(2*n_pnts)xHxW '''
     ''' segmentation: Bx(n_objects=1)xHxW '''
     # normalize segmentation
@@ -99,37 +64,22 @@ def get_keypoints_cf_vf(confidence, vector_field, obj_seg, p, k):
     diff_norm = torch.linalg.norm(diff, ord=2, dim=2, keepdim=True)
     dot = vf[:,:,0:1,:,:]*diff[:,:,0:1,:,:] + vf[:,:,1:2,:,:]*diff[:,:,1:2,:,:]
     score = torch.div(dot, diff_norm+ +sys.float_info.epsilon) # to avoid dividing by zero
-    score = torch.sum(score, dim=4).squeeze(2)
+    if confidence is not None:
+        score = torch.sum(score, dim=4).squeeze(2) * confidence.view(B, n_pnts, -1)
+    else:
+        score = torch.sum(score, dim=4).squeeze(2)
     val, m = score.max(dim=2, keepdim=True)
     return torch.cat(((m % H)/W, (m // H)/H), dim=2) # predicted keypoints of 2D bouding box (x, y) [0, 1]
 
-def compute_2D_points(rgb, out, device, config, mode='vf'):
+def compute_2D_points(out, device, config, mode='vf'):
     _N_KEYPOINT = 9
     if mode == 'cf':
         # compute keypoints from confidence map        
         # gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
         pr_conf = out['cf']
         pr_pnts = get_keypoints_cf(pr_conf)
-    elif mode == 'vf':
+    elif 'vf' in mode:
         # compute key points from vector fields
-        pr_vf = out['vf']
-        pr_sg = out['sg']
-        pr_cl = out['cl']
-        B, _, H, W = rgb.size()
-        pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
-        batch_idx = torch.LongTensor(range(1)).to(device)
-        cls_idx = torch.argmax(pr_cl, dim=1).to(device)
-        pr_sg_1 = pr_sg[batch_idx,cls_idx,:,:].unsqueeze(1)
-        pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])    
-    return pr_pnts 
-
-def compute_3D_points(dataset, out, device, config, mode):
-    # compute key points from confidence map
-    if mode == 'cf':
-        pr_conf = out['cf']
-        pr_pnts = get_keypoints_cf(pr_conf)
-    # compute key points from vector fields
-    elif mode == 'vf':
         pr_vf = out['vf']
         pr_sg = out['sg']
         pr_cl = out['cl']
@@ -138,7 +88,15 @@ def compute_3D_points(dataset, out, device, config, mode):
         batch_idx = torch.LongTensor(range(1)).to(device)
         cls_idx = torch.argmax(pr_cl, dim=1).to(device)
         pr_sg_1 = pr_sg[batch_idx,cls_idx,:,:].unsqueeze(1)
-        pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])
+        if 'cf' in mode:
+            pr_conf = out['cf']
+            pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'], confidence=pr_conf)      
+        else:
+            pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])
+    return pr_pnts 
+
+def compute_3D_points(dataset, out, device, config, mode):
+    pr_pnts = compute_2D_points(out, device, config, mode='vf')
 
     # get ground truth 3D points from mesh file
     pr_cl = out['cl']

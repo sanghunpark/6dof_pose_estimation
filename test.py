@@ -58,7 +58,7 @@ def test(args, config, dim='2D', mode='vf'):
         gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
         
         if dim == '2D':
-            pr_pnts = compute_2D_points(rgb, out, device, config, mode)
+            pr_pnts = compute_2D_points(out, device, config, mode)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
             proj_2d_pr = compute_3D_points(dataset, out, device, config, mode)       
@@ -79,4 +79,4 @@ if __name__ == '__main__':
     test(args,
          config,
          dim='2D',
-         mode='cf')
+         mode='cf_vf')
