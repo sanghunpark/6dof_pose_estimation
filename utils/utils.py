@@ -8,7 +8,8 @@ import torch
 import numpy as np
 import random
 import cv2 as cv
-import json
+import kornia
+from utils.meshply import MeshPly
 
 # OpenPose Eq(7)
 # https://arxiv.org/abs/1812.08008
@@ -25,22 +26,6 @@ def get_vector_field(x, p):
     x = x.unsqueeze(-1).unsqueeze(-1) # Bx(n_points)x2x1x1
     p = p.unsqueeze(1) # Bx1x2xHxW
     return (x-p)/ torch.linalg.norm(x-p, ord=2, dim=2, keepdim=True)
-
-def draw_keypoints(rgb, gt_pnts, pr_pnts):
-    B, _, H, W = rgb.size()
-    imgs = rgb.cpu().detach().permute(0,2,3,1).numpy() # BxCxHxW > BxHxWxC
-    imgs = np.array(imgs)
-    B, n_pnts, _ = pr_pnts.size()
-    for b in range(B):
-        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
-        for i in range(n_pnts):
-            x, y = gt_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 8, ((i+1)/9, (10-i)/9, (10-i)/9), 1)
-            x, y = pr_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 3, ((i+1)/9, (10-i)/9, (10-i)/9), -1)
-        imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-    # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
-    return imgs.transpose((0, 3, 1, 2))
 
 def get_keypoints_cf(confidence_map): # Bx(n_point)xHxW->Bx(n_points)x2
     B, C, H, W = confidence_map.size()
@@ -81,6 +66,88 @@ def get_keypoints_vf(vector_field, obj_seg, p, k):
     score = torch.sum(score, dim=4).squeeze(2)
     val, m = score.max(dim=2, keepdim=True)
     return torch.cat(((m % H)/W, (m // H)/H), dim=2) # predicted keypoints of 2D bouding box (x, y) [0, 1]
+
+def compute_2D_points(rgb, label, out, device, config, mode='vf'):
+    _N_KEYPOINT = 9
+    if mode == 'cf':
+        # compute keypoints from confidence map        
+        gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
+        pr_conf = out['cf']
+        pr_pnts = get_keypoints_cf(pr_conf)
+    elif mode == 'vf':
+        # compute key points from vector fields
+        pr_vf = out['vf']
+        pr_sg = out['sg']
+        pr_cl = out['cl']
+        B, _, H, W = rgb.size()
+        pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
+        batch_idx = torch.LongTensor(range(1)).to(device)
+        cls_idx = torch.argmax(pr_cl, dim=1).to(device)
+        pr_sg_1 = pr_sg[batch_idx,cls_idx,:,:].unsqueeze(1)
+        pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])    
+    return pr_pnts 
+
+def compute_3D_points(dataset, out, device, config, mode='vf'):
+    # compute key points from confidence map
+    if mode == 'cf':
+        pr_conf = out['cf']
+        pr_pnts = get_keypoints_cf(pr_conf)
+    # compute key points from vector fields
+    elif mode == 'vf':
+        pr_vf = out['vf']
+        pr_sg = out['sg']
+        pr_cl = out['cl']
+        B, _, H, W = pr_sg.size()
+        pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
+        batch_idx = torch.LongTensor(range(1)).to(device)
+        cls_idx = torch.argmax(pr_cl, dim=1).to(device)
+        pr_sg_1 = pr_sg[batch_idx,cls_idx,:,:].unsqueeze(1)
+        pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])
+
+    # get ground truth 3D points from mesh file
+    pr_cl = out['cl']
+    cls_idx = torch.argmax(pr_cl, dim=1).to(device)
+    mesh_file = dataset.get_mesh_file(cls_idx)
+    mesh = MeshPly(mesh_file)
+    vertices  = np.c_[np.array(mesh.vertices), np.ones((len(mesh.vertices), 1))].transpose()
+    corners3D = get_3D_corners(vertices)
+
+    # Compute PnP
+    ppx, ppy, fx, fy = dataset.get_camera_info(cls_idx)
+    intrinsic_calibration = get_camera_intrinsic(ppx, ppy, fx, fy)
+    K = np.array(intrinsic_calibration, dtype='float32')
+    corners2D_pr = pr_pnts[0].cpu().numpy()
+    R_pr, t_pr = pnp(np.array(np.transpose(np.concatenate((np.zeros((3, 1)), corners3D[:3, :]), axis=1)), dtype='float32'), corners2D_pr, K)
+
+    # project 3D point into 2D image
+    Rt_pr = np.concatenate((R_pr, t_pr), axis=1)
+    proj_2d_pr = compute_projection(corners3D, Rt_pr, intrinsic_calibration)
+    return proj_2d_pr
+
+def draw_keypoints(rgb, gt_pnts, pr_pnts):
+    B, _, H, W = rgb.size()
+    B, n_pnts, _ = pr_pnts.size()
+    if n_pnts != gt_pnts.size(1):
+        gt_pnts = gt_pnts[:,1:,:] # use only boudning box points (remove controid point)    
+    assert gt_pnts.size(1) == pr_pnts.size(1), f'Erorr: number of points is different.: GT{gt_pnts.size(1)} != PR{pr_pnts.size(1)}'
+
+    imgs = rgb.cpu().detach().permute(0,2,3,1).numpy() # BxCxHxW > BxHxWxC
+    imgs = np.array(imgs)
+   
+    for b in range(B):
+        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
+        for i in range(n_pnts):
+            x, y = gt_pnts[b][i]
+            img = cv.circle(img, (x*W, y*H), 8, ((i+1)/9, (10-i)/9, (10-i)/9), 1)
+            x, y = pr_pnts[b][i]
+            img = cv.circle(img, (x*W, y*H), 3, ((i+1)/9, (10-i)/9, (10-i)/9), -1)
+        imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
+    return imgs.transpose((0, 3, 1, 2))
+
+def draw_bouding_box(rgb, gt_pnts, pr_pnts):
+    B, _, H, W = rgb.size()
+    B, n_pnts, _ = pr_pnts.size()
 
 ## SingleShotPose
 def get_3D_corners(vertices):    
