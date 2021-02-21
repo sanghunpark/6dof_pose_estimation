@@ -9,7 +9,8 @@ import numpy as np
 import random
 import cv2 as cv
 import kornia
-from utils.meshply import MeshPly
+# from utils.meshply import MeshPly
+import trimesh
 
 # OpenPose Eq(7)
 # https://arxiv.org/abs/1812.08008
@@ -87,7 +88,7 @@ def compute_2D_points(rgb, label, out, device, config, mode='vf'):
         pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])    
     return pr_pnts 
 
-def compute_3D_points(dataset, out, device, config, mode='vf'):
+def compute_3D_points(dataset, out, device, config, mode, gt_pnts):
     # compute key points from confidence map
     if mode == 'cf':
         pr_conf = out['cf']
@@ -108,20 +109,26 @@ def compute_3D_points(dataset, out, device, config, mode='vf'):
     pr_cl = out['cl']
     cls_idx = torch.argmax(pr_cl, dim=1).to(device)
     mesh_file = dataset.get_mesh_file(cls_idx)
-    mesh = MeshPly(mesh_file)
-    vertices  = np.c_[np.array(mesh.vertices), np.ones((len(mesh.vertices), 1))].transpose()
-    corners3D = get_3D_corners(vertices)
+    mesh = trimesh.load(mesh_file)
+
+    # vertices  = np.c_[np.array(mesh.vertices), np.ones((len(mesh.vertices), 1))].transpose()
+    corners3D = get_3D_corners(mesh)    
 
     # Compute PnP
     ppx, ppy, fx, fy = dataset.get_camera_info(cls_idx)
     intrinsic_calibration = get_camera_intrinsic(ppx, ppy, fx, fy)
     K = np.array(intrinsic_calibration, dtype='float32')
     corners2D_pr = pr_pnts[0].cpu().numpy()
-    R_pr, t_pr = pnp(np.array(np.transpose(np.concatenate((np.zeros((3, 1)), corners3D[:3, :]), axis=1)), dtype='float32'), corners2D_pr, K)
-
+    # corners2D_pr = gt_pnts[0].cpu().numpy() # test
+    corners2D_pr[:,0] *= 640 # width # to-do : get width/height from dataset
+    corners2D_pr[:,1] *= 480 # height
+    # R_pr, t_pr = pnp(np.array(np.transpose(np.concatenate((np.zeros((3, 1)), corners3D[:3, :]), axis=1)), dtype='float32'), corners2D_pr, K)
+    R_pr, t_pr = pnp(np.array(np.transpose(corners3D[:3, :]), dtype='float32'), corners2D_pr, K)
     # project 3D point into 2D image
     Rt_pr = np.concatenate((R_pr, t_pr), axis=1)
     proj_2d_pr = compute_projection(corners3D, Rt_pr, intrinsic_calibration)
+    proj_2d_pr[0,:] /= 640
+    proj_2d_pr[1,:] /= 480
     return proj_2d_pr
 
 def draw_keypoints(rgb, gt_pnts, pr_pnts):
@@ -145,15 +152,16 @@ def draw_keypoints(rgb, gt_pnts, pr_pnts):
     # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
     return imgs.transpose((0, 3, 1, 2))
 
-def draw_bouding_box(rgb, pnts, color):
-    B, _, H, W = rgb.size()
+def draw_bouding_box(img, pnts, color):
+    _, H, W = img.size()
     _N_BB_PNTS = 8
     if pnts.size(1) != _N_BB_PNTS:
         pnts = pnts[:,1:,:]
     assert pnts.size(1) == _N_BB_PNTS, f'Erorr: number of points must be {_N_BB_PNTS}: PNT:{pnts.size(1)}'
     B, n_pnts, _ = pnts.size()
-    imgs = rgb.cpu().detach().permute(0,2,3,1).numpy() # BxCxHxW > BxHxWxC
-    imgs = np.array(imgs)
+    img = img.cpu().detach().permute(1,2,0).numpy() # CxHxW > HxWxC
+    img = np.array(img)
+    img = cv.resize(img, dsize=(640, 480), interpolation=cv.INTER_AREA)
     bb_pnts = torch.cat((pnts[:,(0,1),:],
                          pnts[:,(3,2),:],
                          pnts[:,(4,5),:],
@@ -162,30 +170,35 @@ def draw_bouding_box(rgb, pnts, color):
                          pnts[:,(6,4),:],
                          pnts[:,(1,3),:],
                          pnts[:,(7,5),:]), dim=1)
-    for b in range(B):
-        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
-        for i in range(0, n_pnts*2, 4):
-            pts = bb_pnts[:,i:i+4,:].permute(1,0,2).cpu().numpy()
-            pts[:,:,0] *= W
-            pts[:,:,1] *= H
-            pts = np.array(pts, np.int32)
-            cv.polylines(img, [pts], True, color, 1)
 
-        imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+    for i in range(0, n_pnts*2, 4):
+        pts = bb_pnts[:,i:i+4,:].permute(1,0,2).cpu().numpy()
+
+        pts[:,:,0] *= 640 # W
+        pts[:,:,1] *= 480 # H
+        pts = np.array(pts, np.int32)
+        cv.polylines(img, [pts], True, color, 1)
+
+    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
-    return imgs.transpose((0, 3, 1, 2))
+    # return imgs.transpose((0, 3, 1, 2))
+    return img.transpose(2,0,1) #  HxWxC > CxHxW
     
-
-
 ## SingleShotPose
-def get_3D_corners(vertices):    
+def get_3D_corners(mesh):
+    Tform = mesh.apply_obb()
+    vertices = mesh.bounding_box.vertices
+    centroid = mesh.centroid    
+
     min_x = np.min(vertices[0,:])
     max_x = np.max(vertices[0,:])
     min_y = np.min(vertices[1,:])
     max_y = np.max(vertices[1,:])
     min_z = np.min(vertices[2,:])
     max_z = np.max(vertices[2,:])
-    corners = np.array([[min_x, min_y, min_z],
+    points = np.array([[centroid[0], centroid[1], centroid[2]],
+                        [min_x, min_y, min_z],
                         [min_x, min_y, max_z],
                         [min_x, max_y, min_z],
                         [min_x, max_y, max_z],
@@ -193,7 +206,9 @@ def get_3D_corners(vertices):
                         [max_x, min_y, max_z],
                         [max_x, max_y, min_z],
                         [max_x, max_y, max_z]])
-    corners = np.concatenate((np.transpose(corners), np.ones((1,8)) ), axis=0)
+    points = trimesh.transformations.transform_points(points, np.linalg.inv(Tform))
+    corners = np.concatenate((np.transpose(points), np.ones((1,9)) ), axis=0)
+    print(corners.shape)
     return corners
 
 def pnp(points_3D, points_2D, cameraMatrix):
@@ -201,9 +216,13 @@ def pnp(points_3D, points_2D, cameraMatrix):
         distCoeffs = pnp.distCoeffs
     except:
         distCoeffs = np.zeros((8, 1), dtype='float32') 
-
-    assert points_3D.shape[0] == points_2D.shape[0], 'points 3D and points 2D must have same number of vertices'
-
+    assert points_3D.shape[0] == points_2D.shape[0], f'points 3D and points 2D must have same number of vertices: 3D:{points_3D.shape} 2D:{points_2D.shape} '
+    
+    # _, R_exp, t, _ = cv.solvePnPRansac(points_3D,
+    #                         np.ascontiguousarray(points_2D[:,:2]).reshape((-1,1,2)),
+    #                         cameraMatrix,
+    #                         distCoeffs)
+    
     _, R_exp, t = cv.solvePnP(points_3D,
                               np.ascontiguousarray(points_2D[:,:2]).reshape((-1,1,2)),
                               cameraMatrix,

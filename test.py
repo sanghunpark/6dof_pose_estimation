@@ -60,19 +60,19 @@ def test(args, config, dim='2D', mode='vf'):
             pr_pnts = compute_2D_points(rgb, label, out, device, config)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
-            proj_2d_pr = compute_3D_points(dataset, out, device, config, mode='cf')            
+            proj_2d_pr = compute_3D_points(dataset, out, device, config, 'cf', gt_pnts)       
             pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)            
 
         # draw 2D points 
         # imgs = draw_keypoints(rgb, gt_pnts,  pr_pnts)
-        imgs = draw_bouding_box(rgb, gt_pnts, color=(0,1,0))
-        imgs = draw_bouding_box(torch.Tensor(imgs), pr_pnts, color=(0,0,1))
-        cv.imshow(dim+' '+mode, cv.cvtColor(imgs[0].transpose(1,2,0), cv.COLOR_RGB2BGR) )
+        img = draw_bouding_box(rgb[0], gt_pnts, color=(0,1,0))
+        img = draw_bouding_box(torch.Tensor(img), pr_pnts, color=(0,0,1))
+        cv.imshow(dim+' '+mode, cv.cvtColor(img.transpose(1,2,0), cv.COLOR_RGB2BGR) )
         cv.waitKey(0)
     
 if __name__ == '__main__':
     args, config = options()
     test(args,
          config,
-         dim='3D',
+         dim='2D',
          mode='cf')
