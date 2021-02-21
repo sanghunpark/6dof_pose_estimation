@@ -68,11 +68,11 @@ def get_keypoints_vf(vector_field, obj_seg, p, k):
     val, m = score.max(dim=2, keepdim=True)
     return torch.cat(((m % H)/W, (m // H)/H), dim=2) # predicted keypoints of 2D bouding box (x, y) [0, 1]
 
-def compute_2D_points(rgb, label, out, device, config, mode='vf'):
+def compute_2D_points(rgb, out, device, config, mode='vf'):
     _N_KEYPOINT = 9
     if mode == 'cf':
         # compute keypoints from confidence map        
-        gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
+        # gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
         pr_conf = out['cf']
         pr_pnts = get_keypoints_cf(pr_conf)
     elif mode == 'vf':
@@ -88,7 +88,7 @@ def compute_2D_points(rgb, label, out, device, config, mode='vf'):
         pr_pnts = get_keypoints_vf(pr_vf, pr_sg_1, pos, k=config['k'])    
     return pr_pnts 
 
-def compute_3D_points(dataset, out, device, config, mode, gt_pnts):
+def compute_3D_points(dataset, out, device, config, mode):
     # compute key points from confidence map
     if mode == 'cf':
         pr_conf = out['cf']
@@ -153,14 +153,12 @@ def draw_keypoints(rgb, gt_pnts, pr_pnts):
     return imgs.transpose((0, 3, 1, 2))
 
 def draw_bouding_box(img, pnts, color):
-    _, H, W = img.size()
     _N_BB_PNTS = 8
     if pnts.size(1) != _N_BB_PNTS:
         pnts = pnts[:,1:,:]
     assert pnts.size(1) == _N_BB_PNTS, f'Erorr: number of points must be {_N_BB_PNTS}: PNT:{pnts.size(1)}'
     B, n_pnts, _ = pnts.size()
-    img = img.cpu().detach().permute(1,2,0).numpy() # CxHxW > HxWxC
-    img = np.array(img)
+        
     img = cv.resize(img, dsize=(640, 480), interpolation=cv.INTER_AREA)
     bb_pnts = torch.cat((pnts[:,(0,1),:],
                          pnts[:,(3,2),:],
@@ -171,7 +169,7 @@ def draw_bouding_box(img, pnts, color):
                          pnts[:,(1,3),:],
                          pnts[:,(7,5),:]), dim=1)
 
-    img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+    # img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
     for i in range(0, n_pnts*2, 4):
         pts = bb_pnts[:,i:i+4,:].permute(1,0,2).cpu().numpy()
 
@@ -180,10 +178,10 @@ def draw_bouding_box(img, pnts, color):
         pts = np.array(pts, np.int32)
         cv.polylines(img, [pts], True, color, 1)
 
-    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    # img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
     # return imgs.transpose((0, 3, 1, 2))
-    return img.transpose(2,0,1) #  HxWxC > CxHxW
+    return img
     
 ## SingleShotPose
 def get_3D_corners(mesh):
@@ -208,7 +206,6 @@ def get_3D_corners(mesh):
                         [max_x, max_y, max_z]])
     points = trimesh.transformations.transform_points(points, np.linalg.inv(Tform))
     corners = np.concatenate((np.transpose(points), np.ones((1,9)) ), axis=0)
-    print(corners.shape)
     return corners
 
 def pnp(points_3D, points_2D, cameraMatrix):

@@ -21,6 +21,9 @@ import cv2 as cv
 import kornia
 import numpy as np
 
+import matplotlib.pyplot as plt
+
+
 def test(args, config, dim='2D', mode='vf'):
     data_root = config['data_root']
     device = torch.device('cuda:0' if args.gpu else 'cpu')
@@ -49,6 +52,10 @@ def test(args, config, dim='2D', mode='vf'):
                                 shuffle=False,
                                 num_workers=config['num_workers'],
                                 drop_last=True)
+    save_path = './demo/'
+    batch_idx = torch.LongTensor(range(1)).to(device)
+    text = np.ones((config['img_size'],config['img_size'],3))
+    obj_list = {0:'Diffuser', 1:'RealSense', 2:'Peace'}
 
     for idx, data in enumerate(val_data_loader):        
         rgb = data['rgb'].to(device)
@@ -66,14 +73,42 @@ def test(args, config, dim='2D', mode='vf'):
 
         # draw 2D points 
         # imgs = draw_keypoints(rgb, gt_pnts,  pr_pnts)
-        img = rgb[0].permute(1,2,0).detach().cpu().numpy()
-        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
+        img = data['rgb'][0].permute(1,2,0).detach().numpy()
+        # img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
         img = draw_bouding_box(img, gt_pnts, color=(0,1,0))
-        img = draw_bouding_box(img, pr_pnts, color=(0,0,1))
-        cv.imshow(dim+' '+mode, img )
-        if cv.waitKey(1) & 0xFF == ord('q'):
-            break
+        img = draw_bouding_box(img, pr_pnts, color=(1,0,0))
+        img = cv.resize(img, dsize=(config['img_size'], config['img_size']), interpolation=cv.INTER_AREA)
 
+
+        # segmentation
+        cls_idx = torch.argmax(out['cl'], dim=1).to(device)
+        sg_1 = out['sg'][batch_idx,cls_idx,:,:]
+        obj_name = obj_list[cls_idx.item()]
+      
+        fig, ax = plt.subplots(nrows=2, ncols=3, figsize=(15, 10), dpi=100, sharex=True, sharey=True)
+
+        ax[0][0].imshow(img)
+        ax[0][0].set_xlabel('Predicted Bounding Box (Red:Predict, Green:GT)')
+        ax[0][1].imshow(sg_1.permute(1,2,0).detach().numpy())
+        ax[0][1].set_xlabel('segmentation of ' + obj_name)
+        ax[0][2].imshow(out['cf'][0,0:1,:,:].permute(1,2,0).detach().numpy())
+        ax[0][2].set_xlabel('confidence map (Centroid keypoint)')
+
+        ax[1][0].imshow(text)
+        ax[1][0].text(40, config['img_size']/2+20, obj_name, fontsize=40)
+        ax[1][0].set_xlabel('classification')        
+        ax[1][1].imshow(out['vf'][0,0:1,:,:].permute(1,2,0).detach().numpy())
+        ax[1][1].set_xlabel('Vector field-X (Centroid keypoint)') 
+        ax[1][2].imshow(out['vf'][0,1:2,:,:].permute(1,2,0).detach().numpy())
+        ax[1][2].set_xlabel('Vector field-Y (Centroid keypoint)') 
+
+        # plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
+        #     hspace = 1, wspace = 1)
+        plt.xticks([])
+        plt.yticks([])
+        plt.savefig(save_path+f'demo_{idx:05}.png')
+        
+    
 if __name__ == '__main__':
     args, config = options()
     test(args,

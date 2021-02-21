@@ -1,4 +1,6 @@
 import warnings
+
+from torchvision.transforms.transforms import ToPILImage
 warnings.filterwarnings("ignore")
 
 # PyTorch
@@ -21,7 +23,7 @@ import cv2 as cv
 import kornia
 import numpy as np
 
-def test(args, config, dim='2D', mode='vf'):
+def demo(args, config, dim='2D', mode='vf'):
     data_root = config['data_root']
     device = torch.device('cuda:0' if args.gpu else 'cpu')
 
@@ -36,47 +38,51 @@ def test(args, config, dim='2D', mode='vf'):
     model = Trainer.load_weight(config['checkpoint'], model)
     model.eval()
 
-    # get dataset and set data loader
+    # get dataset and set data loader (to get 3D keypoints)
     transf = transforms.Compose([
+        transforms.ToPILImage(),
         transforms.Resize((config['img_size'], config['img_size'])),
         transforms.ToTensor()])
     dataset = Linemod(data_root,                   
                     n_class = config['n_class'],
                     split='test',
                     transform=transf)
-    val_data_loader = DataLoader(dataset,
-                                batch_size=1,
-                                shuffle=False,
-                                num_workers=config['num_workers'],
-                                drop_last=True)
 
-    for idx, data in enumerate(val_data_loader):        
-        rgb = data['rgb'].to(device)
-        label = data['label'].to(device)
+    # get image from a webcam
+    cap = cv.VideoCapture(0)
+    batch_idx = torch.LongTensor(range(1)).to(device)
+    while(True):
+        ret, frame = cap.read()
+        rgb = transf(frame).unsqueeze(0).to(device)    
+        # rgb = torch.Tensor(frame).permute(2,0,1).unsqueeze(0).to(device)        
         out = model(rgb)
-        _N_KEYPOINT = 9  
-        gt_pnts = label[:,1:2*_N_KEYPOINT+1].view(-1, _N_KEYPOINT, 2) # Bx(2*n_points+3) > Bx(n_points)x2
-        
         if dim == '2D':
             pr_pnts = compute_2D_points(rgb, out, device, config)
         elif dim == '3D':
             ## 3D (projected 2D points from 3D points)
             proj_2d_pr = compute_3D_points(dataset, out, device, config, 'cf')       
-            pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)            
+            pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)
 
         # draw 2D points 
         # imgs = draw_keypoints(rgb, gt_pnts,  pr_pnts)
-        img = rgb[0].permute(1,2,0).detach().cpu().numpy()
-        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
-        img = draw_bouding_box(img, gt_pnts, color=(0,1,0))
-        img = draw_bouding_box(img, pr_pnts, color=(0,0,1))
-        cv.imshow(dim+' '+mode, img )
+        img = draw_bouding_box(frame, pr_pnts, color=(0.2,1,0))
+        cv.imshow(dim+' '+mode, img)
+        cv.imshow('confidence map', out['cf'][0,0:1,:,:].permute(1,2,0).cpu().detach().numpy())        
+        cls_idx = torch.argmax(out['cl'], dim=1).to(device)
+        sg_1 = out['sg'][batch_idx,cls_idx,:,:]
+        cv.imshow('segmentation', sg_1.permute(1,2,0).cpu().detach().numpy())        
+
         if cv.waitKey(1) & 0xFF == ord('q'):
             break
 
+    # release a webcam
+    cap.release()
+    cv.destroyAllWindows()
+
+    
 if __name__ == '__main__':
     args, config = options()
-    test(args,
+    demo(args,
          config,
          dim='2D',
          mode='cf')
