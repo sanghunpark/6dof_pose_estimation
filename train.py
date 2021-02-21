@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 
 # My library
-from data.linemod import Linemod
+from data.dataset import Dataset6Dof
 from model.posenet import PoseNet
 from model.blocks import WappedDataParallel
 from utils.config import options
@@ -35,7 +35,7 @@ def train(args, config):
         transforms.ToTensor()
     ])
 
-    train_data_loader = DataLoader(Linemod(data_root,                   
+    train_data_loader = DataLoader(Dataset6Dof(data_root,                   
                                     n_class = config['n_class'],
                                     split='train',
                                     transform=transf),
@@ -44,7 +44,7 @@ def train(args, config):
                                     num_workers=config['num_workers'],
                                     drop_last=True)
     
-    val_data_loader = DataLoader(Linemod(data_root,                   
+    val_data_loader = DataLoader(Dataset6Dof(data_root,                   
                                     n_class = config['n_class'],
                                     split='test',
                                     transform=transf),

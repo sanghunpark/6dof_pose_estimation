@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 
 # My library
-from data.linemod import Linemod
+from data.dataset import Dataset6Dof
 from model.posenet import PoseNet
 from model.blocks import WappedDataParallel
 from utils.trainer import Trainer
@@ -20,6 +20,7 @@ draw_keypoints, draw_bouding_box
 import cv2 as cv
 import kornia
 import numpy as np
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
@@ -43,7 +44,7 @@ def test(args, config, dim='2D', mode='vf'):
     transf = transforms.Compose([
         transforms.Resize((config['img_size'], config['img_size'])),
         transforms.ToTensor()])
-    dataset = Linemod(data_root,                   
+    dataset = Dataset6Dof(data_root,                   
                     n_class = config['n_class'],
                     split='test',
                     transform=transf)
@@ -57,6 +58,8 @@ def test(args, config, dim='2D', mode='vf'):
     text = np.ones((config['img_size'],config['img_size'],3))
     obj_list = {0:'Diffuser', 1:'RealSense', 2:'Peace'}
 
+    max_iters = len(val_data_loader)
+    iter_bar = tqdm(desc='iter: ', total=max_iters, position=3, leave=True)
     for idx, data in enumerate(val_data_loader):        
         rgb = data['rgb'].to(device)
         label = data['label'].to(device)
@@ -106,6 +109,7 @@ def test(args, config, dim='2D', mode='vf'):
         plt.xticks([])
         plt.yticks([])
         plt.savefig(save_path+f'demo_{idx:05}.png')
+        iter_bar.update()
         
     
 if __name__ == '__main__':

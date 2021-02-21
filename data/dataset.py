@@ -13,7 +13,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import json
 
-class Linemod(Dataset):
+class Dataset6Dof(Dataset):
     def __init__(self, root, n_class, split = 'train', shuffle = True, transform = None) -> None:
         self.root = root
         self.transform = transform

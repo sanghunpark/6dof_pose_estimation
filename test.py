@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 
 # My library
-from data.linemod import Linemod
+from data.dataset import Dataset6Dof
 from model.posenet import PoseNet
 from model.blocks import WappedDataParallel
 from utils.trainer import Trainer
@@ -40,7 +40,7 @@ def test(args, config, dim='2D', mode='vf'):
     transf = transforms.Compose([
         transforms.Resize((config['img_size'], config['img_size'])),
         transforms.ToTensor()])
-    dataset = Linemod(data_root,                   
+    dataset = Dataset6Dof(data_root,                   
                     n_class = config['n_class'],
                     split='test',
                     transform=transf)
