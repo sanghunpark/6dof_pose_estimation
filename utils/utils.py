@@ -129,7 +129,7 @@ def draw_keypoints(rgb, gt_pnts, pr_pnts):
     B, n_pnts, _ = pr_pnts.size()
     if n_pnts != gt_pnts.size(1):
         gt_pnts = gt_pnts[:,1:,:] # use only boudning box points (remove controid point)    
-    assert gt_pnts.size(1) == pr_pnts.size(1), f'Erorr: number of points is different.: GT{gt_pnts.size(1)} != PR{pr_pnts.size(1)}'
+    assert gt_pnts.size(1) == pr_pnts.size(1), f'Erorr: number of points is different.: GT:{gt_pnts.size(1)} != PR:{pr_pnts.size(1)}'
 
     imgs = rgb.cpu().detach().permute(0,2,3,1).numpy() # BxCxHxW > BxHxWxC
     imgs = np.array(imgs)
@@ -138,16 +138,44 @@ def draw_keypoints(rgb, gt_pnts, pr_pnts):
         img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
         for i in range(n_pnts):
             x, y = gt_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 8, ((i+1)/9, (10-i)/9, (10-i)/9), 1)
+            img = cv.circle(img, (x*W, y*H), 8, (i/9, (9-i)/9, (9-i)/9), 1)
             x, y = pr_pnts[b][i]
-            img = cv.circle(img, (x*W, y*H), 3, ((i+1)/9, (10-i)/9, (10-i)/9), -1)
+            img = cv.circle(img, (x*W, y*H), 3, (i/9, (9-i)/9, (9-i)/9), -1)
         imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
     return imgs.transpose((0, 3, 1, 2))
 
-def draw_bouding_box(rgb, gt_pnts, pr_pnts):
+def draw_bouding_box(rgb, pnts, color):
     B, _, H, W = rgb.size()
-    B, n_pnts, _ = pr_pnts.size()
+    _N_BB_PNTS = 8
+    if pnts.size(1) != _N_BB_PNTS:
+        pnts = pnts[:,1:,:]
+    assert pnts.size(1) == _N_BB_PNTS, f'Erorr: number of points must be {_N_BB_PNTS}: PNT:{pnts.size(1)}'
+    B, n_pnts, _ = pnts.size()
+    imgs = rgb.cpu().detach().permute(0,2,3,1).numpy() # BxCxHxW > BxHxWxC
+    imgs = np.array(imgs)
+    bb_pnts = torch.cat((pnts[:,(0,1),:],
+                         pnts[:,(3,2),:],
+                         pnts[:,(4,5),:],
+                         pnts[:,(7,6),:],
+                         pnts[:,(0,2),:],
+                         pnts[:,(6,4),:],
+                         pnts[:,(1,3),:],
+                         pnts[:,(7,5),:]), dim=1)
+    for b in range(B):
+        img = cv.cvtColor(imgs[b].copy(), cv.COLOR_RGB2BGR)
+        for i in range(0, n_pnts*2, 4):
+            pts = bb_pnts[:,i:i+4,:].permute(1,0,2).cpu().numpy()
+            pts[:,:,0] *= W
+            pts[:,:,1] *= H
+            pts = np.array(pts, np.int32)
+            cv.polylines(img, [pts], True, color, 1)
+
+        imgs[b] = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    # return torch.from_numpy(imgs).permute(0, 3, 1, 2)
+    return imgs.transpose((0, 3, 1, 2))
+    
+
 
 ## SingleShotPose
 def get_3D_corners(vertices):    

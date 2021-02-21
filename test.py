@@ -64,7 +64,9 @@ def test(args, config, dim='2D', mode='vf'):
             pr_pnts = torch.from_numpy(proj_2d_pr).permute(1,0).unsqueeze(0)            
 
         # draw 2D points 
-        imgs = draw_keypoints(rgb, gt_pnts,  pr_pnts)
+        # imgs = draw_keypoints(rgb, gt_pnts,  pr_pnts)
+        imgs = draw_bouding_box(rgb, gt_pnts, color=(0,1,0))
+        imgs = draw_bouding_box(torch.Tensor(imgs), pr_pnts, color=(0,0,1))
         cv.imshow(dim+' '+mode, cv.cvtColor(imgs[0].transpose(1,2,0), cv.COLOR_RGB2BGR) )
         cv.waitKey(0)
     
@@ -72,5 +74,5 @@ if __name__ == '__main__':
     args, config = options()
     test(args,
          config,
-         dim='2D',
-         mode='vf')
+         dim='3D',
+         mode='cf')
