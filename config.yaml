@@ -1,5 +1,5 @@
 # path
-checkpoint: ./checkpoint/sanghun6/model_00021000.pt
+checkpoint: ./checkpoint/sanghun7/model_00000000.pt
 
 # data
 data_root: ./data/SANGHUN

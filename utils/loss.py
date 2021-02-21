@@ -7,7 +7,7 @@ from torch.nn import functional as F
 import kornia
 
 # My library
-from utils.utils import get_confidence_map, get_keypoints_cf, get_vector_field
+from utils.utils import get_confidence_map, get_keypoints_vf, get_vector_field
     
 def compute_losses(out, data, device, config):
     _N_KEYPOINT = 9
@@ -28,10 +28,6 @@ def compute_losses(out, data, device, config):
     # pr_conf = cf[batch_idx,cls_idx,:,:,:]# Bx(n_keypoints)xHxW
     loss_cf = F.mse_loss(gt_conf, pr_conf)
 
-    ## loss for keypoints of a bounding box
-    pr_pnts = get_keypoints_cf(pr_conf)
-    loss_pt = F.mse_loss(gt_pnts, pr_pnts)
-
     ## loss for vector field
     pr_vf = out['vf']
     gt_vf = get_vector_field(gt_pnts, pos.clone()).view(B, 2*_N_KEYPOINT, H, W)
@@ -46,6 +42,12 @@ def compute_losses(out, data, device, config):
     gt_cls = torch.zeros((B, n_class)).to(device)
     gt_cls.scatter_(1, cls_idx.unsqueeze(-1), 1) # one-hot encoding
     loss_cl = F.mse_loss(gt_cls, pr_cls)
+    
+    ## loss for keypoints of a bounding box
+    pos = (kornia.create_meshgrid(H, W).permute(0,3,1,2).to(device) + 1) / 2 # (1xHxWx2) > (1x2xHxW), [-1,1] > [0, 1]  
+    pr_pnts = get_keypoints_vf(pr_vf, pr_mask, pos, config['k'], pr_conf)
+    loss_pt = F.mse_loss(gt_pnts, pr_pnts)
+
 
     return [loss_cf, loss_pt, loss_vf, loss_sg, loss_cl]
 
