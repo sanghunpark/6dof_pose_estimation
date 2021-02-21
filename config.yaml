@@ -1,9 +1,9 @@
 # path
-checkpoint: ./checkpoint/train5/model_00080000.pt
+checkpoint: ./checkpoint/sanghun6/model_00000000.pt
 
 # data
-data_root: ./data/LINEMOD
-n_class: 13
+data_root: ./data/SANGHUN
+n_class: 3
 
 # data_root: ./data/TEST
 # n_class: 3
@@ -16,7 +16,7 @@ checkpoint_freq: 1000
 # training
 batch_size: 8
 num_workers: 4
-max_epochs: 100
+max_epochs: 1000
 
 # optimizer
 lr: 0.0001
@@ -35,16 +35,16 @@ sigma: 0.4
 
 # network
 rgb_2_vf_seg:
-  n_f: 8
+  n_f: 16
   n_down: 3
   n_res_blks: 2
 
 mlp:
-  n_f: 8
+  n_f: 16
   n_blks: 3
 
 cf_net:
-  n_f: 8
+  n_f: 16
   n_updown: 3
   n_res_blks: 2
 
